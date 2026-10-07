@@ -491,35 +491,45 @@
   /* ── HERO 3 ─────────────────────────────────────────────────────────────── */
   function renderHero3(view) {
     const pts = view.lorenz.map(p => ({ x: p.x, y: p.y }));
-    mount("cLorenz", {
-      type: "scatter",
-      data: {
-        datasets: [
-          { label: "Actual distribution", data: pts, showLine: true, borderColor: T().series,
-            backgroundColor: T().series, borderWidth: 2.2, pointRadius: 0, fill: false,
-            tension: 0 },
-          { label: "Perfect equality", data: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
-            // A reference, not a series: 1px dashed --ink-3, which is 4.72:1 where
-            // the old --ink-muted was 2.96:1 and failed.
-            showLine: true, borderColor: T().muted, borderWidth: 1,
-            borderDash: [5, 4], pointRadius: 0, fill: false },
-        ],
-      },
-      options: {
-        plugins: {
-          legend: legendOpts(true),
-                    title: { text: `Lorenz curve — Gini ${view.kpi.gini}` },
-          tooltip: tooltipOpts({
-            label: c => ` ${pct(c.parsed.x)} of prescribers → ${pct(c.parsed.y)} of drug spend`,
-          }),
-        },
-        scales: {
-          x: axisOpts("Share of drug-billing providers, poorest to richest", v => pct(v, 0),
-                      { min: 0, max: 1 }),
-          y: axisOpts("Cumulative share of drug spend", v => pct(v, 0), { min: 0, max: 1 }),
-        },
-      },
-    });
+    /* A Lorenz curve IS a line, so it stays one. The only encoding decision is the
+       reference diagonal: 1px dashed --ink-3, which is 4.72:1 where the old
+       --ink-muted was 2.96:1 and failed. */
+    (() => {
+      /* Ruling V applies here too, even though these two charts cannot use
+         mountSvg: the viewBox must match the rendered width or the whole SVG scales
+         and every label scales with it. Measured: the host is 606px, so a hardcoded
+         520 would magnify by 1.17 and drift at any other viewport. Read the host. */
+      const host = document.getElementById("cLorenz");
+      const S = V(), t = T();
+      const W = Math.max(320, host.clientWidth || 520), H = 360;
+      const padL = 54, padR = 10, padT = 10, padB = 42;
+      const x = S.scaleLinear([0, 1], [padL, W - padR]);
+      const y = S.scaleLinear([0, 1], [H - padB, padT]);
+      const curve = pts.map((p) => [x(p.x), y(p.y)]);
+      let body = "";
+      for (const tick of S.niceTicks(0, 1, 5)) {
+        body += S.rule(padL, W - padR, y(tick), { stroke: t.grid });
+      }
+      body += S.pathLine([[x(0), y(0)], [x(1), y(1)]],
+        { stroke: t.muted, width: 1, dash: "5 4" });
+      body += S.pathLine(curve, { stroke: t.series, width: 2.2 });
+      body += S.axisBottom(x, H - padB, (v) => pct(v, 0),
+        { axis: t.axis, muted: t.muted });
+      for (const tick of S.niceTicks(0, 1, 5)) {
+        body += `<text x="${padL - 8}" y="${y(tick) + 3.5}" text-anchor="end" `
+          + `font-size="10.5" fill="${t.muted}">${pct(tick, 0)}</text>`;
+      }
+      body += `<text x="${padL}" y="${H - 6}" font-size="10.5" fill="${t.muted}">`
+        + `Share of drug-billing providers, poorest to richest</text>`;
+      host.innerHTML =
+        `<h3 class="figtitle">Lorenz curve — Gini ${view.kpi.gini}</h3>`
+        + `<div class="legend"><span class="lk">`
+        + `<i style="background:${t.series}"></i>Actual distribution</span>`
+        + `<span class="lk"><i style="background:${t.sheet};`
+        + `border-color:${t.muted}"></i>Perfect equality</span></div>`
+        + S.frame(W, H, body,
+            { aria: `Lorenz curve of drug spend concentration, Gini ${view.kpi.gini}` });
+    })();
 
     const j = view.jcodeTop.slice(0, 15);
     mountSvg("cJcode", "Largest drug codes by Medicare payment", {
@@ -678,46 +688,41 @@
     const maxV = Math.max(...rows.map(d => d.f_svcs || 0)) || 1;
     const ss = view.siteStats;
 
-    mount("cSite", {
-      type: "bubble",
-      data: {
-        datasets: [
-          { label: "Procedure code (bubble = facility volume)",
-            data: rows.map(d => ({ x: d.o_pymt, y: d.f_pymt,
-              r: 4 + 14 * Math.sqrt((d.f_svcs || 0) / maxV) })),
-            backgroundColor: T().series + "b0", borderColor: T().series, borderWidth: 1 },
-          { label: "Equal payment in both settings", type: "line",
-            data: [{ x: 0, y: 0 }, { x: lim, y: lim }],
-            borderColor: T().muted, borderWidth: 1, borderDash: [5, 4],
-            pointRadius: 0, fill: false },
-        ],
-      },
-      options: {
-        plugins: {
-          legend: legendOpts(true),
-                    title: { text: "The 60 highest-volume codes billed in both settings" },
-          tooltip: tooltipOpts({
-            title: c => c[0].datasetIndex === 0 ? rows[c[0].dataIndex].hcpcs : "",
-            label: c => {
-              if (c.datasetIndex !== 0) return "";
-              const d = rows[c.dataIndex];
-              return [` Facility: ${money(d.f_pymt)} per service`,
-                      ` Office: ${money(d.o_pymt)} per service`,
-                      ` Facility pays ${d.ratio === null ? "—"
-                          : d.ratio.toFixed(2) + "x"} the office rate`,
-                      ` ${count(d.f_svcs)} facility services`];
-            },
-            afterBody: c => c[0].datasetIndex === 0
-              ? rows[c[0].dataIndex].desc.slice(0, 70) : "",
-          }),
-        },
-        scales: {
-          x: axisOpts("Office (non-facility) payment per service", v => money(v, 0),
-                      { min: 0, max: lim }),
-          y: axisOpts("Facility payment per service", v => money(v, 0), { min: 0, max: lim }),
-        },
-      },
-    });
+    (() => {
+      // Ruling V: read the host rather than hardcoding, same as cLorenz above.
+      const host = document.getElementById("cSite");
+      const S = V(), t = T();
+      const W = Math.max(320, host.clientWidth || 520), H = 430;
+      const padL = 62, padR = 12, padT = 10, padB = 44;
+      const x = S.scaleLinear([0, lim], [padL, W - padR]);
+      const y = S.scaleLinear([0, lim], [H - padB, padT]);
+      let body = "";
+      for (const tick of x.ticks(5)) {
+        body += S.rule(padL, W - padR, y(tick), { stroke: t.grid });
+      }
+      body += S.pathLine([[x(0), y(0)], [x(lim), y(lim)]],
+        { stroke: t.muted, width: 1, dash: "5 4" });
+      for (const d of rows) {
+        body += S.bubble(x(d.o_pymt), y(d.f_pymt),
+          4 + 14 * Math.sqrt((d.f_svcs || 0) / maxV),
+          { fill: t.series + "b0", stroke: t.series,
+            tip: `${d.hcpcs} · facility ${money(d.f_pymt)} · `
+              + `office ${money(d.o_pymt)} · ${count(d.f_svcs)} facility services` });
+      }
+      body += S.axisBottom(x, H - padB, (v) => money(v, 0),
+        { axis: t.axis, muted: t.muted });
+      for (const tick of y.ticks(5)) {
+        body += `<text x="${padL - 8}" y="${y(tick) + 3.5}" text-anchor="end" `
+          + `font-size="10.5" fill="${t.muted}">${money(tick, 0)}</text>`;
+      }
+      body += `<text x="${padL}" y="${H - 6}" font-size="10.5" fill="${t.muted}">`
+        + `Office (non-facility) payment per service</text>`;
+      host.innerHTML =
+        `<h3 class="figtitle">The 60 highest-volume codes billed in both `
+        + `settings</h3>`
+        + S.frame(W, H, body,
+            { aria: "Facility against office payment per service, bubble area is facility volume" });
+    })();
 
     // Both directions on one diverging axis -- showing only the positive tail is
     // how the original "savings" framing went wrong.

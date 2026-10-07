@@ -53,3 +53,15 @@ test("money honours its digits argument below 1000, not just above", () => {
   // The default is unchanged.
   assert.equal(F.money(12.5), "$12.50");
 });
+
+test("an explicit digits argument trims trailing zeros, so axis labels stay truthful", () => {
+  // money(1.5e9, 0) rendered "$2B" -- distinct from its neighbours, so the
+  // duplicate-label fallback never fired, and wrong by half a billion.
+  assert.equal(F.money(1.5e9, 1), "$1.5B");
+  assert.equal(F.money(1e9, 1), "$1B");       // "1.0B" -> "1B"
+  assert.equal(F.money(5e8, 1), "$500M");     // "500.0M" -> "500M"
+  assert.equal(F.money(0, 1), "$0");          // "0.0" -> "0"
+  // The no-digits path keeps its decimals: trimming there would break the KPI ribbon.
+  assert.equal(F.money(2e9), "$2.00B");
+  assert.equal(F.money(12.5), "$12.50");
+});

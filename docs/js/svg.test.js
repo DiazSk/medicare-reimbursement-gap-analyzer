@@ -10,6 +10,8 @@ const path = require("node:path");
 global.window = {};
 eval(fs.readFileSync(path.join(__dirname, "svg.js"), "utf8"));
 const S = global.window.MD.svg;
+eval(fs.readFileSync(path.join(__dirname, "format.js"), "utf8"));
+const money = global.window.MD.format.money;
 
 test("scaleLinear maps domain ends to range ends exactly", () => {
   const x = S.scaleLinear([0, 100], [0, 500]);
@@ -437,8 +439,8 @@ test("dotPlot clamps a zero or absurd width instead of collapsing", () => {
 });
 
 test("dotPlot's value column can be more precise than its axis ticks", () => {
-  // money(v, 0) renders 2.35e9 and 1.86e9 both as "$2B". The dot's position carries
-  // magnitude; this column is the only place the exact figure appears, so it must be
+  // A one-decimal axis format renders 2.35e9 and 1.86e9 as "$2.4B" and "$1.9B". The
+  // dot's position carries magnitude; this column is the only place the exact figure appears, so it must be
   // able to disagree with the tick format.
   const rows = [{ k: "a", v: 2354722302.4 }, { k: "b", v: 1860000000 }];
   const out = S.dotPlot({
@@ -464,8 +466,8 @@ test("dotPlot falls back to fmt when no fmtValue is given", () => {
 });
 
 test("axisBottom falls back to the precise format when ticks would collide", () => {
-  // money(v, 0) renders 1.5e9 and 2e9 both as "$2B". Two identical labels on one axis
-  // read as a repeated datum, which is worse than a long label.
+  // A 0-decimal formatter (the brief below) renders 1.5e9 and 2e9 both as "$2B". Two
+  // identical labels on one axis read as a repeated datum, worse than a long label.
   const x = S.scaleLinear([0, 2e9], [0, 400]);
   x.ticks = () => [0, 5e8, 1e9, 1.5e9, 2e9];
   const brief = (v) => "$" + Math.round(v / 1e9) + "B";
@@ -636,4 +638,25 @@ test("dumbbellPlot renders prose for a zero-row cohort", () => {
   });
   assert.ok(!out.includes("<svg"));
   assert.match(out, /class="empty"/);
+});
+
+test("a money(v, 1) axis labels 1.5e9 as $1.5B, never rounds it to $2B", () => {
+  // cSiteBar's last tick sat at 1.5e9 and read "$2B": wrong by half a billion, and
+  // distinct from "$1B" so the duplicate-label net never fired.
+  const rows = [{ k: "a", v: 1.5e9 }, { k: "b", v: 5e8 }];
+  const out = S.dotPlot({
+    t: TK, rows, label: (r) => r.k, value: (r) => r.v,
+    fmt: (v) => money(v, 1), fmtValue: (v) => money(v),
+    axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  const ticks = [...out.matchAll(/text-anchor="middle"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  assert.ok(ticks.includes("$1.5B"), `ticks were ${ticks}`);
+  assert.ok(!ticks.includes("$2B"), `ticks were ${ticks}`);
+});
+
+test("no panels.js axis formats money with zero digits", () => {
+  // The SVG test above exercises svg.js; this is what notices a call site in panels.js
+  // that was missed, or reverted. money(x, 0) rounds 1.5e9 to "$2B".
+  const src = fs.readFileSync(path.join(__dirname, "panels.js"), "utf8");
+  assert.deepEqual(src.match(/money\(\w+, *0\)/g), null);
 });

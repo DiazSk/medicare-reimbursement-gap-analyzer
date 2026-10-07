@@ -544,3 +544,24 @@ test("dotPlot's emphasis raises only the matching row's label", () => {
   assert.match(out, /fill="#16181a">b</);
   assert.match(out, /fill="#4f5156">a</);
 });
+
+test("axisLeft's family survives the token's embedded quotes and actually applies", () => {
+  /* The real token is `"Schibsted Grotesk", ui-sans-serif, …`. Interpolated raw into a
+     font-family attribute it split the tag into 14 attributes with 9 garbage names, and
+     a presentation attribute loses to `.chartbox svg text { font-family: … }` anyway.
+     So it must be an escaped inline style. */
+  const SANS = '"Schibsted Grotesk", ui-sans-serif, sans-serif';
+  const band = S.scaleBand(["Orthopedic Surgery"], [0, 100], 0);
+  const a = S.axisLeft(["Orthopedic Surgery"], band, 50,
+    { muted: "#6b6d72", family: SANS });
+  assert.equal((a.match(/<text/g) || []).length, 1, "exactly one tag");
+  assert.ok(!/\sschibsted=/i.test(a), `the font stack leaked into attribute names: ${a}`);
+  assert.ok(!/font-family="/.test(a),
+    "a presentation attribute loses to the stylesheet; use an inline style");
+  assert.match(a, /style="font-family:[^"]*Schibsted Grotesk/);
+});
+
+test("axisLeft emits no style attribute when no family is given", () => {
+  const band = S.scaleBand(["a"], [0, 100], 0);
+  assert.ok(!S.axisLeft(["a"], band, 50, { muted: "#000" }).includes("style="));
+});

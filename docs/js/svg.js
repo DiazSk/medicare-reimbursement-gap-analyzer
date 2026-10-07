@@ -216,12 +216,18 @@
 
   function axisLeft(labels, band, x, o) {
     const size = o.size == null ? 10.5 : o.size;
+    /* The family goes in a STYLE attribute, not a presentation attribute, for two
+       reasons both observed on the rendered page: the token value contains double
+       quotes, which unescaped split the tag into fourteen attributes with nine garbage
+       names; and dash.css's `.chartbox svg text { font-family: var(--font-mono) }`
+       outranks a presentation attribute, so even escaped it would never apply. An
+       inline style beats both. */
+    const fam = o.family ? ` style="font-family:${esc(o.family)}"` : "";
     let out = "";
     for (const [i, l] of labels.entries()) {
       const emph = o.emphasis ? !!o.emphasis(l) : false;
       out += `<text x="${n2(x)}" y="${n2(band(l, i) + size / 3)}" text-anchor="end" `
-        + `font-size="${size}"`
-        + (o.family ? ` font-family="${o.family}"` : "")
+        + `font-size="${size}"${fam}`
         + ` fill="${emph && o.ink ? o.ink : o.muted}">${esc(l)}</text>`;
     }
     return out;

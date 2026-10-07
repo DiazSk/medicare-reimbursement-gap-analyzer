@@ -405,8 +405,10 @@
       highlight: (d) => !!hi && d.specialty === hi,
       axisTitle: "Non-participating exposure vs. participating",
       aria: "Non-participating patient exposure by specialty",
-      tip: (d) => `${d.specialty} · ${pct(d.premium_pct)} · `
-        + `${count(d.n_n)} non-participating of ${count(d.n_y + d.n_n)}`,
+      tip: (d) => `${d.specialty} · ${pct(d.premium_pct)} `
+        + `${d.premium_pct < 0 ? "lower" : "higher"} patient exposure · `
+        + `participating ${money(d.exp_y)}/beneficiary (${count(d.n_y)} providers) · `
+        + `non-participating ${money(d.exp_n)}/beneficiary (${count(d.n_n)} providers)`,
     });
 
     // The denominators ARE the story, so they get their own chart rather than a

@@ -312,3 +312,29 @@ test("rampInk degrades to the dark-fill ink past the end of the ramp", () => {
   assert.notEqual(P.rampInk(0), P.rampInk(3),
     "bins 0 and 3 must not share an ink -- that would mean one of them fails contrast");
 });
+
+test("mountSvg dispatches to the named renderer", () => {
+  // Task 7's cNonParAbs needs dumbbellPlot to get the same width injection as
+  // dotPlot; a helper hard-wired to dotPlot would re-open the footgun it closes.
+  const calls = [];
+  const realSvg = global.window.MD.svg;
+  global.window.MD.svg = Object.assign({}, realSvg, {
+    dotPlot: (s) => { calls.push(["dotPlot", s.width]); return "<svg/>"; },
+    dumbbellPlot: (s) => { calls.push(["dumbbellPlot", s.width]); return "<svg/>"; },
+  });
+  const hadDoc = Object.prototype.hasOwnProperty.call(global, "document");
+  const realDoc = global.document;
+  try {
+    const host = { clientWidth: 480, innerHTML: "" };
+    global.document = { getElementById: () => host };
+
+    P.mountSvg("x", null, { rows: [] });
+    P.mountSvg("y", null, { rows: [] }, "dumbbellPlot");
+
+    assert.deepEqual(calls, [["dotPlot", 480], ["dumbbellPlot", 480]],
+      "the 4th argument must select the renderer, and both must receive the host width");
+  } finally {
+    global.window.MD.svg = realSvg;
+    if (hadDoc) global.document = realDoc; else delete global.document;
+  }
+});

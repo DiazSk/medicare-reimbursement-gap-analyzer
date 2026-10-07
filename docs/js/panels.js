@@ -70,15 +70,26 @@
   const VIEWBOX = "-60 12 1085 595";
   const V = () => root.MD.svg;
 
-  /* The SVG analogue of mount(). dotPlot cannot measure its own host -- svg.js is
-     deliberately DOM-free -- so the width is read here. Without it a caller silently
-     gets a 760-wide viewBox in a 526px box and 7.3px labels, which is the defect this
-     helper exists to make unrepeatable. */
-  function mountSvg(id, title, spec) {
+  /* The SVG analogue of mount(). dotPlot and dumbbellPlot cannot measure their own
+     host -- svg.js is deliberately DOM-free -- so the width is read here. Without it a
+     caller silently gets a 760-wide viewBox in a 526px box and 7.3px labels, which is
+     the defect this helper exists to make unrepeatable.
+
+     `renderer` names the svg.js function to call, so dumbbellPlot gets the same width
+     injection rather than re-opening the footgun at its own call site. Charts that
+     build bespoke SVG (hero 3's Lorenz curve, hero 5's scatter) take no spec object
+     and read their host directly; generalising further for two callers that share no
+     shape would be inventing a framework. */
+  function mountSvg(id, title, spec, renderer) {
     const host = document.getElementById(id);
-    if (!host) return;
+    if (!host) {
+      // A typo'd id would otherwise be an empty box with nothing in the console.
+      console.warn(`mountSvg: no element #${id}`);
+      return;
+    }
+    const draw = V()[renderer || "dotPlot"];
     host.innerHTML = (title ? `<h3 class="figtitle">${V().esc(title)}</h3>` : "")
-      + V().dotPlot(Object.assign({ t: T(), width: host.clientWidth || 760 }, spec));
+      + draw(Object.assign({ t: T(), width: host.clientWidth || 760 }, spec));
   }
   // Callout labels for areas too small to hold one sit in a right margin at this x.
   const GUTTER_X = 952;

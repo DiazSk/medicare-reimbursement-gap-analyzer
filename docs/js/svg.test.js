@@ -575,6 +575,46 @@ test("dumbbellPlot draws two dots and a connector per row", () => {
   });
   assert.equal((out.match(/<circle/g) || []).length, 4, "two dots per row");
   assert.match(out, /Participating/);
+  // One hairline and one connector per row, plus the axis line. The connector was
+  // only ever caught incidentally, because removing it also removed the circles.
+  assert.equal((out.match(/<line/g) || []).length, 2 * rows.length + 1,
+    "expected a hairline and a connector per row, plus the axis");
+  assert.match(out, /<circle[^>]*fill="#86b6ef"/,
+    "the smaller cohort must keep --whisker, so the pair reads weighted without a second hue");
+});
+
+test("dumbbellPlot labels its log axis with decades", () => {
+  /* Dropping axisBottom from this renderer produced no test failure. A log axis with
+     no tick labels is the defect that nearly shipped when scaleLog had no .ticks() --
+     pin the labels, not just the marks. */
+  const rows = [{ k: "a", y: 1000, n: 10 }, { k: "b", y: 500, n: 5 }];
+  const out = S.dumbbellPlot({
+    t: TK, rows, label: (r) => r.k, a: (r) => r.y, b: (r) => r.n,
+    fmt: (v) => String(v), axisTitle: "Providers", aria: "test",
+    tip: (r) => r.k, legend: ["Participating", "Non-participating"],
+  });
+  for (const tick of ["1", "10", "100", "1000"]) {
+    assert.ok(out.includes(">" + tick + "<"), `decade ${tick} missing from the axis`);
+  }
+});
+
+test("dumbbellPlot gives duplicate labels their own rows", () => {
+  /* scaleBand keys by label, so without the row index two identical specialty names
+     stack onto one band. This renderer's index-aware band was added by hand and had
+     no test holding it in place. */
+  const rows = [{ k: "Internal Medicine", y: 100, n: 10 },
+                { k: "Internal Medicine", y: 200, n: 20 },
+                { k: "Other", y: 300, n: 30 }];
+  const out = S.dumbbellPlot({
+    t: TK, rows, label: (r) => r.k, a: (r) => r.y, b: (r) => r.n,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k, legend: ["A", "B"],
+  });
+  const cys = [...out.matchAll(/<circle[^>]*cy="([\d.]+)"/g)].map((m) => m[1]);
+  assert.equal(cys.length, 6, "two dots per row");
+  assert.equal(new Set(cys).size, 3, `three distinct bands, got cy=${cys}`);
+  const ys = [...out.matchAll(/<text x="[\d.-]+" y="([\d.-]+)" text-anchor="end"/g)]
+    .map((m) => m[1]);
+  assert.equal(new Set(ys).size, 3, `three distinct label rows, got y=${ys}`);
 });
 
 test("dumbbellPlot tolerates a zero cohort on the log axis", () => {

@@ -32,9 +32,12 @@
 
   // Ratios are SUM/SUM, never AVG(ratio) -- see powerbi/MEASURES.md.
   const MEASURES = [
-    { key: "paid",   label: "Medicare paid",     sql: "SUM(Tot_Mdcr_Pymt_Amt_sum)", format: (v) => F().money(v) },
-    { key: "sbmtd",  label: "Submitted charges", sql: "SUM(Tot_Sbmtd_Chrg_sum)",    format: (v) => F().money(v) },
-    { key: "alowd",  label: "Medicare allowed",  sql: "SUM(Tot_Mdcr_Alowd_Amt_sum)", format: (v) => F().money(v) },
+    { key: "paid",   label: "Medicare paid",     sql: "SUM(Tot_Mdcr_Pymt_Amt_sum)", format: (v) => F().money(v),
+      axisFmt: (v) => F().moneyTick(v) },
+    { key: "sbmtd",  label: "Submitted charges", sql: "SUM(Tot_Sbmtd_Chrg_sum)",    format: (v) => F().money(v),
+      axisFmt: (v) => F().moneyTick(v) },
+    { key: "alowd",  label: "Medicare allowed",  sql: "SUM(Tot_Mdcr_Alowd_Amt_sum)", format: (v) => F().money(v),
+      axisFmt: (v) => F().moneyTick(v) },
     { key: "svcs",   label: "Services",          sql: "SUM(Tot_Srvcs_sum)",          format: (v) => F().count(v) },
     { key: "benes",  label: "Beneficiary proxy", sql: "SUM(Tot_Benes_sum)",          format: (v) => F().count(v) },
     // `ratio: true` marks the two measures where SUM/SUM can divide two tiny
@@ -51,7 +54,8 @@
       sql: "SUM(Tot_Mdcr_Pymt_Amt_sum) / NULLIF(SUM(Tot_Mdcr_Alowd_Amt_sum), 0)",
       format: (v) => F().pct(v, 1) },
     { key: "geoprem", label: "Geographic premium",
-      sql: "SUM(Tot_Mdcr_Pymt_Amt_sum) - SUM(Tot_Mdcr_Stdzd_Amt_sum)", format: (v) => F().money(v) },
+      sql: "SUM(Tot_Mdcr_Pymt_Amt_sum) - SUM(Tot_Mdcr_Stdzd_Amt_sum)", format: (v) => F().money(v),
+      axisFmt: (v) => F().moneyTick(v) },
   ];
 
   const qlit = (v) => `'${String(v).replace(/'/g, "''")}'`;
@@ -189,7 +193,7 @@
       rows: top,
       label: (r) => chartLabel(r, rows, cols),
       value: (r) => r.value,
-      fmt: (v) => m.format(v),
+      fmt: (v) => (m.axisFmt || m.format)(v),   // terse ticks; fmtValue keeps the cents
       fmtValue: (v) => m.format(v),
       axisTitle: m.label,
       aria: cols ? `${m.label} by ${dimLabel(rows)} and ${dimLabel(cols)}`
@@ -260,9 +264,9 @@
       const pFilterVal = document.getElementById("pFilterVal");
       pFilterVal.value = pick(pFilterVal, saved.filterVal, "all");
 
-      // Let the font swap land before first paint so the table does not reflow under
-      // the reader. (The chart does not care: svg.js sizes its label gutter from
-      // character count, never from measured text.)
+      // Kept from before the SVG port, where it protected Chart.js's one-shot label
+      // measurement. The chart no longer needs it (svg.js sizes from character count).
+      // NOT tested: whether removing it makes the table reflow after the font swap.
       if (document.fonts) await document.fonts.ready;
       await run();
     } catch (err) {

@@ -235,13 +235,15 @@ function zeroOrOneDigitMoney(src) {
   return hits;
 }
 
-test("no money() call in panels.js passes a literal 0 or 1 digit count", () => {
+test("no money() call in panels.js or explore.js passes a literal 0 or 1 digit count", () => {
   /* money(1.5e9, 0) renders "$2B" -- wrong by half a billion, and distinct from
      "$1B", so axisBottom's duplicate-label fallback never fires on it. Axes use
      moneyTick. Currency passes 2 (cents) or nothing, so 0 and 1 are never legitimate
-     in panels.js. Only a source check notices a call site that was missed or reverted,
+     in either file (explore.js draws its own axis now). Only a source check notices a call site that was missed or reverted,
      which is why the token and sentinel guards above read the source too. */
-  assert.deepEqual(zeroOrOneDigitMoney(read("js/panels.js")), []);
+  for (const f of ["js/panels.js", "js/explore.js"]) {
+    assert.deepEqual(zeroOrOneDigitMoney(read(f)), [], f);
+  }
 });
 
 test("the money-digits guard catches every spelling it exists for", () => {

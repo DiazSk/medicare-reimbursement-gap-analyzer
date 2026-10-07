@@ -128,7 +128,7 @@
     <div class="chartbox tall"><canvas id="cNonParAbs"></canvas></div>
   </div>
   <p class="read" id="h2read"></p>
-  <p class="read" id="h2caveat"></p>
+  <p class="read callout" id="h2caveat"></p>
   <div class="pcap"><span>Pl. II &middot; Non-participation premium by specialty &middot; Unit: specialty</span><span class="src">Source <code>gold_hero_non_par_premium</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 5</span></div>
 </section>
 
@@ -158,7 +158,10 @@
      and physician assistants all bill. Markup ratio is the service-weighted submitted charge
      divided by the Medicare allowed amount — how many times the allowed amount was asked for.</p>
   <div id="cCred"></div>
-  <div class="tblwrap"><table id="tCred"></table></div>
+  <details class="showtbl">
+    <summary>Show table</summary>
+    <div class="tblwrap"><table id="tCred"></table></div>
+  </details>
   <p class="read" id="h4read"></p>
   <div class="pcap"><span>Pl. IV &middot; Submitted-to-allowed markup by credential &middot; Unit: HCPCS &times; credential</span><span class="src">Source <code>gold_hero_credentials_markup</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 9</span></div>
 </section>
@@ -179,7 +182,7 @@
     <div class="chartbox tall"><canvas id="cSiteBar"></canvas></div>
   </div>
   <p class="read" id="h5read"></p>
-  <p class="read" id="h5caveat"></p>
+  <p class="read callout" id="h5caveat"></p>
   <div class="pcap"><span>Pl. V &middot; Site-of-service differential &middot; Unit: HCPCS</span><span class="src">Source <code>gold_hero_site_neutral</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 11</span></div>
 </section>
 
@@ -198,31 +201,80 @@
 </section>
 
 <footer class="page" id="notes">
-  <h3>Method &amp; provenance</h3>
-  <ul>
+  <div class="noteshead">
+    <h3>Notes on method</h3>
+    <p class="notesub">Eleven things a reader should know before quoting any figure on this
+      page. Several of these were stranded in the repository README, where nobody reading
+      the numbers would find them.</p>
+  </div>
+  <ol class="notes">
     <li><strong>Source.</strong> CMS <em>Medicare Physician &amp; Other Practitioners — by
       Provider and Service</em>, calendar year 2023, at the
-      <code>NPI x HCPCS x place-of-service</code> grain.
+      <code>NPI &times; HCPCS &times; place-of-service</code> grain.
       <a id="srcLink" href="#" rel="noopener">Dataset landing page</a>. Public domain
       (U.S. Government work).</li>
-    <li><strong>Pipeline.</strong> Bronze (raw, string-only) → Silver (typed, cleansed,
-      DECIMAL(18,2) money and DECIMAL(12,6) ratios) → Gold (3 dimensions + 1 fact + 5 hero
-      marts), in PySpark on Delta Lake. Originally executed on Azure Databricks over ADLS Gen2;
-      now reproducible locally from the public source, since the Azure subscription is retired.</li>
-    <li><strong>Data quality.</strong> 13 hard assertions gate the Gold layer — null and domain
-      checks, dimension-key uniqueness, row-count bands, and a relative float-drift probe that
-      recomputes total Medicare payment two independent ways.</li>
-    <li><strong>Suppression.</strong> CMS withholds any provider-service row covering fewer than
-      11 beneficiaries, so all totals here understate true national volume. Beneficiary counts
-      are summed across rows and double-count patients seen for more than one procedure; they
-      are labelled as a proxy throughout.</li>
-    <li><strong>Known quirk.</strong> <code>Tot_Srvcs</code> is fractional in about 0.09% of CMS
-      rows and is cast to a whole number, which slightly understates those rows' totals. This
-      reproduces the original pipeline's behaviour rather than silently diverging from it.</li>
-    <li><strong>Not affiliated with CMS.</strong> Independent analytical work. Nothing here is
-      a finding of fraud, waste, or abuse; billing variation has many legitimate causes
-      including case mix, geography, and practice setting.</li>
-  </ul>
+
+    <li><strong>This is a census, not a sample.</strong> Every billing provider in the
+      published file is included, which is why no figure here carries a confidence
+      interval — an interval would be a category error. What it is <em>not</em> is a census
+      of Medicare: see note 4.</li>
+
+    <li><strong>Pipeline.</strong> Bronze (raw, string-only) &rarr; Silver (typed, cleansed,
+      <code>DECIMAL(18,2)</code> money and <code>DECIMAL(12,6)</code> ratios) &rarr; Gold
+      (3 dimensions + 1 fact + 5 hero marts), in PySpark on Delta Lake. Originally executed
+      on Azure Databricks over ADLS Gen2; now reproducible locally from the public source,
+      since the Azure subscription is retired.</li>
+
+    <li><strong>Suppression biases every total downward, by an unknown amount.</strong> CMS
+      withholds any provider-service row covering fewer than 11 beneficiaries. The direction
+      of that bias is known and its magnitude is not, and nothing here attempts to bound it.</li>
+
+    <li><strong>Beneficiary counts are a proxy.</strong> They are summed across rows, so a
+      patient seen for more than one procedure is counted more than once. Every ratio
+      derived from them is labelled "per beneficiary-proxy" rather than per patient.</li>
+
+    <li><strong>The non-participating provider count depends on the grain.</strong> Counted
+      once per NPI from <code>dim_provider</code> it is <strong>1,130</strong>; counted once
+      per specialty a provider appears under it is <strong>1,461</strong>. The headline uses
+      1,130. Both are correct; they answer different questions.</li>
+
+    <li><strong>Credential tiers are parsed from a free-text CMS field,</strong> so tier
+      assignment in the markup matrix is approximate. The matrix shows what was asked for,
+      not what was paid: Medicare's allowed amount barely moves between tiers.</li>
+
+    <li><strong>Published thresholds.</strong> A specialty enters the participation panel at
+      <strong>30</strong> or more non-participating providers; below that the number still
+      renders, wearing a badge that names its cohort size. The detail table is the 200
+      largest providers whose drug payments exceed <strong>60%</strong> of their Medicare
+      total. The drug-code chart is the top <strong>25</strong> by payment, the
+      site-of-service scatter the top <strong>60</strong> by volume, and the Lorenz curve is
+      sampled to <strong>200</strong> points.</li>
+
+    <li><strong>The colour scale on the map is clamped at its 95th percentile,</strong> and
+      the legend states the true range underneath it. Alaska's geographic adjustment is
+      roughly twice the next state's, so anchoring the scale on the maximum flattened the
+      other fifty.</li>
+
+    <li><strong>CMS republished the 2023 file.</strong> Revision <code>R25_P05_V20</code>
+      (April 2025) carries about 5,000 fewer rows than the extract this pipeline was first
+      built against — confirmed three independent ways, by <code>wc -l</code>, Spark's
+      <code>read.text</code>, and the CMS API's <code>/data/stats</code> endpoint. At 0.05%
+      it changes no finding, and the filter deltas reproduce exactly, which is the signal
+      that the transformations are identical.</li>
+
+    <li><strong>Three data-quality checks were defective, and re-running exposed them.</strong>
+      <code>decimal_drift_zero</code> asserted an <em>absolute</em> sub-cent gap between a
+      float sum and an exact decimal sum, but that quantity depends on the summation tree
+      and therefore on partition count: it passed on Databricks at $0.0025 and measured
+      <strong>$0.8470</strong> locally, where it would have failed. It is relative now
+      (<code>drift / total &lt; 1e-9</code>). Two others, <code>pos_in_domain</code> and
+      <code>ent_in_domain</code>, were vacuous — <code>isin("F", "O", None)</code> makes the
+      predicate NULL for every row, so they could never fail. Thirteen assertions gate the
+      Gold layer today.</li>
+  </ol>
+  <p class="notfiled"><strong>Not affiliated with CMS.</strong> Independent analytical work.
+    Nothing here is a finding of fraud, waste, or abuse; billing variation has many
+    legitimate causes including case mix, geography, and practice setting.</p>
   <p id="foot"></p>
 </footer>
 
@@ -292,6 +344,24 @@ function viewFromPayload() {
   set();
   addEventListener("resize", set, { passive: true });
 })();
+
+/* Open every collapsed table for printing, then put it back. CSS cannot do this:
+   Chrome hides a closed <details> through the ::details-content pseudo with
+   content-visibility, which `display` on the children does not override, and the table
+   simply did not appear on paper. On paper there is nobody to click the toggle, so a
+   collapsed table is just missing data. */
+addEventListener("beforeprint", () => {
+  for (const d of document.querySelectorAll("details:not([open])")) {
+    d.dataset.printOpened = "1";
+    d.open = true;
+  }
+});
+addEventListener("afterprint", () => {
+  for (const d of document.querySelectorAll("details[data-print-opened]")) {
+    d.open = false;
+    delete d.dataset.printOpened;
+  }
+});
 
 const liveStatus = document.getElementById("liveStatus");
 E.onProgress(({ phase, loaded, total }) => {

@@ -275,6 +275,30 @@
   /* A no-data cell must not read as a low value: sheet ground, --ink-3 em dash. */
   .hmcell.hmna { background: var(--sheet); color: var(--ink-3); font-weight: 400; }
 
+  /* SHOW TABLE. A native <details>, so keyboard support, ARIA state and the open/closed
+     toggle all come free -- no JS and no new id. The summary is styled as the
+     reference's square button. */
+  .showtbl { margin-top: 14px; }
+  .showtbl > summary { display: inline-block; cursor: pointer; list-style: none;
+    font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.1em; padding: 7px 11px; color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink); }
+  .showtbl > summary::-webkit-details-marker { display: none; }
+  .showtbl > summary:hover { background: var(--ink); color: var(--sheet); }
+  .showtbl > summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  .showtbl[open] > summary::after { content: " \2014 hide"; }
+
+  /* A callout contradicts the plate it sits under, so it is set apart rather than read
+     as more of the same prose: ink rules top and bottom, and a hatched left band in the
+     --hair that is legal as texture but never as a mark or as text. */
+  .read.callout { border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
+    margin-top: 18px; padding: 14px 0 14px 46px; max-width: 86ch;
+    background-image: repeating-linear-gradient(45deg, transparent 0 4px,
+      var(--hair) 4px 5px);
+    background-repeat: no-repeat;
+    background-size: 30px calc(100% - 28px);
+    background-position: left top 14px; }
+
   /* tables */
   table { width: 100%; border-collapse: collapse; font-size: 13px;
     font-variant-numeric: tabular-nums; }
@@ -294,11 +318,32 @@
   .pager button[disabled] { opacity: 0.4; cursor: default; }
   .empty { color: var(--ink-3); padding: 24px 0; text-align: center; font-size: 13.5px; }
 
-  footer.page { color: var(--ink-2); font-size: 13px; border-top: 1px solid var(--hair);
-    margin-top: 34px; padding-top: 20px; }
-  footer.page h3 { font-size: 14px; margin: 0 0 8px; color: var(--ink); }
-  footer.page ul { margin: 0 0 16px; padding-left: 20px; }
-  footer.page li { margin-bottom: 5px; }
+  /* The notes page. Mono numerals in their own column, a hairline between every note,
+     and the whole thing set narrow -- it is a reference document, not a sidebar. The
+     numbers are real: each one is cited from the prose or the captions above. */
+  footer.page { color: var(--ink-2); font-size: 13px; border-top: 1px solid var(--ink);
+    margin-top: 40px; padding-top: 24px; }
+  .noteshead { display: grid; gap: 6px; margin-bottom: 18px; }
+  footer.page h3 { font-size: 15px; margin: 0; color: var(--ink);
+    letter-spacing: -0.01em; }
+  .notesub { margin: 0; color: var(--ink-3); font-size: 13px; max-width: 72ch; }
+
+  .notes { list-style: none; margin: 0; padding: 0;
+    counter-reset: note; max-width: 104ch; }
+  /* Absolutely-positioned numeral rather than a two-column grid. Chrome mis-fragments
+     a CSS grid across printed pages: `minmax(0, 1fr)` collapsed to near-zero and the
+     notes printed one word per line with the inline <code> runs overlapping each other.
+     Normal block flow paginates correctly and needs less CSS. */
+  .notes > li { counter-increment: note; position: relative;
+    padding: 14px 0 14px 42px; border-top: 1px solid var(--hair); }
+  .notes > li::before { content: counter(note, decimal-leading-zero);
+    position: absolute; left: 0; top: 15px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    color: var(--ink-3); }
+  .notes > li:last-child { border-bottom: 1px solid var(--hair); }
+  .notes strong { color: var(--ink); font-weight: 600; }
+
+  .notfiled { margin: 20px 0 0; max-width: 86ch; color: var(--ink-3); }
   /* --series is 4.03:1 and illegal as text; --link is the 7.39:1 one. */
   a { color: var(--link); }
 
@@ -310,6 +355,14 @@
     .band { position: static; }
     .band > .wrap { padding-top: 14px; padding-bottom: 14px; }
     .pcap { font-size: 10px; letter-spacing: 0.05em; }
+    /* 86px for a 5-character HCPCS code plus four value columns does not fit 375px.
+       The code column shrinks and the cells lose their padding before the grid does. */
+    .hmrow { grid-template-columns: 54px repeat(var(--hmcols, 4), 1fr); }
+    .hmhead span { font-size: 8.5px; letter-spacing: 0.04em; padding: 5px 2px; }
+    .hmcode { font-size: 10px; padding: 0 4px; }
+    .hmcell { font-size: 11px; padding: 11px 2px; }
+    .notes > li { padding-left: 30px; }
+    .read.callout { padding-left: 34px; background-size: 22px calc(100% - 28px); }
     .pcap .src { text-align: left; }
     .seal { width: 104px; height: 104px; }
     .plate { padding: 18px 16px; }
@@ -322,9 +375,49 @@
     .kpi .value { font-size: 22px; }
   }
   @media print {
-    .filters, .toggle, .pager { display: none; }
-    .plate { break-inside: avoid; border-color: #ccc; }
+    /* Controls do nothing on paper. The nav and band are chrome; the Repository button
+       is a link nobody can follow from a printout. */
+    .bar, .band, .filters, .toggle, .pager, .showtbl > summary { display: none; }
     body { background: #fff; }
+    .wrap { max-width: none; padding: 0; }
+
+    /* A plate is a plate on paper too, so keep the frame and the registration marks --
+       print backgrounds are a browser setting, and the hairline border carries it when
+       they are off.
+
+       Deliberately NO break-inside: avoid here. Measured: every plate is taller than a
+       page, so the rule cannot be honoured -- the browser breaks anyway and the request
+       only forces the break EARLY, leaving most of the preceding page blank. That took
+       the document from a reasonable length to 27 pages. Keep the avoid on the things
+       that do fit: a caption and a single note. */
+    .plate { border-color: #999; margin-bottom: 14px; }
+    .pcap, .eyebrow { break-inside: avoid; }
+    .plate > h2 { break-after: avoid; }
+
+    /* Expanding a collapsed table on paper cannot be done from CSS: Chrome hides a
+       closed <details> through the ::details-content pseudo with content-visibility,
+       which `display` on the children does not defeat. Measured -- the table simply did
+       not print. index.html opens every <details> on beforeprint instead and restores
+       them afterwards; these two lines only cover the pseudo where it is supported. */
+    .showtbl::details-content { content-visibility: visible !important; }
+    .tblwrap { overflow: visible; }
+
+    /* Chart heights are deliberately NOT overridden here. Chart.js sizes the canvas
+       once, to the box it measured on screen, and shrinking .chartbox in print does not
+       re-render it -- the canvas overflows and paints over the readout underneath.
+       Measured on hero 5. The SVG map is immune, being vector, so it alone is capped. */
+    .tilemap svg { max-height: 420px; }
+    /* Two columns on paper as well: stacking doubles the height of every split plate. */
+    .split { grid-template-columns: 1fr 1fr; gap: 14px; }
+    .split.stacked { grid-template-columns: 1fr; }
+
+    /* The notes are the point of printing this. Never break a note across pages. */
+    .notes > li { break-inside: avoid; }
+    footer.page { break-before: page; }
+
+    a { text-decoration: none; color: var(--ink); }
+    a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9px;
+      font-family: var(--font-mono); color: #666; word-break: break-all; }
   }
 
   /* Small-sample guardrail badges. Never display:none — the point is that the

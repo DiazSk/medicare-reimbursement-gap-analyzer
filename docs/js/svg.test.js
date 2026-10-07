@@ -153,10 +153,13 @@ test("dot carries its tooltip text as both data-tip and a <title>", () => {
   assert.match(d, /<title>Obstetrics &amp; Gynecology<\/title>/);
 });
 
-test("dot emits no tip attributes when no tip is given", () => {
-  const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff" });
-  assert.ok(!d.includes("data-tip"), "an absent tip must not become an empty one");
-  assert.ok(!d.includes("<title>"));
+test("an absent, null or empty tip emits no attributes at all", () => {
+  // An empty <title> is an empty announcement, which is worse than none.
+  for (const tip of [undefined, null, ""]) {
+    const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff", tip });
+    assert.ok(!d.includes("data-tip"), `tip=${JSON.stringify(tip)} produced data-tip`);
+    assert.ok(!d.includes("<title>"), `tip=${JSON.stringify(tip)} produced a <title>`);
+  }
 });
 
 test("rule draws a horizontal hairline at the given y", () => {
@@ -167,12 +170,24 @@ test("rule draws a horizontal hairline at the given y", () => {
   assert.match(r, /y2="40"/);
 });
 
-test("dumbbell connects two dots and weights the smaller cohort lighter", () => {
+test("dumbbell puts --whisker on the B end inside a --series stroke", () => {
+  /* The compliance mechanism: the lighter cohort reads lighter WITHOUT a second hue,
+     because its --whisker fill sits inside the same --series stroke. Greping for the
+     whisker colour anywhere in the string passes with the mechanism dismantled --
+     three separate mutations proved that. Pin which END carries which fill. */
   const d = S.dumbbell(10, 90, 50, { series: "#2a78d6", sheet: "#f5f4f6",
                                      whisker: "#86b6ef" });
-  assert.match(d, /<line/, "the pair needs its connector");
-  assert.equal((d.match(/<circle/g) || []).length, 2, "exactly two dots");
-  assert.match(d, /#86b6ef/, "the lighter cohort uses --whisker");
+  const circles = [...d.matchAll(/<circle[^>]*\/>/g)].map((m) => m[0]);
+  assert.equal(circles.length, 2, "exactly two dots");
+  const bEnd = circles.find((c) => /cx="90"/.test(c));
+  const aEnd = circles.find((c) => /cx="10"/.test(c));
+  assert.ok(bEnd && aEnd, `both ends must be drawn: ${circles.join(" ")}`);
+  assert.match(bEnd, /fill="#86b6ef"/, "B is the smaller cohort: --whisker fill");
+  assert.match(bEnd, /stroke="#2a78d6"/, "and it keeps the --series stroke");
+  assert.match(aEnd, /fill="#2a78d6"/, "A is solid --series");
+  const line = d.match(/<line[^>]*\/>/)[0];
+  assert.match(line, /stroke="#2a78d6"/, "the connector is --series");
+  assert.ok(!/#86b6ef/.test(line), "the connector must not carry the whisker colour");
 });
 
 test("pathLine emits one move and the rest lineto, and nothing for empty input", () => {
@@ -196,7 +211,28 @@ test("bubble keeps an explicit stroke, which is its compliance mechanism", () =>
   assert.match(b, /stroke-width="1"/);
 });
 
-test("every mark rounds coordinates so the markup stays diffable", () => {
-  const d = S.dot(10.123456, 20.987654, 4, { filled: true, series: "#000", sheet: "#fff" });
-  assert.ok(!/\d\.\d{3,}/.test(d), `coordinates should be short, got: ${d}`);
+test("bubble and dumbbell carry their tip the same way dot does", () => {
+  const b = S.bubble(1, 2, 3, { fill: "#000", stroke: "#000", tip: "B & C" });
+  assert.match(b, /data-tip="B &amp; C"/);
+  assert.match(b, /<title>B &amp; C<\/title>/);
+  const d = S.dumbbell(1, 9, 5,
+    { series: "#000", sheet: "#fff", whisker: "#888", tip: "D & E" });
+  assert.match(d, /data-tip="D &amp; E"/);
+  assert.match(d, /<title>D &amp; E<\/title>/);
+});
+
+test("every mark rounds its coordinates and honours its size options", () => {
+  const long = /\d\.\d{3,}/;
+  const o = { series: "#000", sheet: "#fff", whisker: "#888", filled: true,
+              fill: "#000", stroke: "#000" };
+  assert.ok(!long.test(S.dot(10.123456, 20.987654, 4, o)), "dot");
+  assert.ok(!long.test(S.rule(1.123456, 9.987654, 5.555555, { stroke: "#000" })), "rule");
+  assert.ok(!long.test(S.bubble(1.123456, 2.987654, 3.555555, o)), "bubble");
+  assert.ok(!long.test(S.pathLine([[1.123456, 2.987654]], { stroke: "#000" })), "pathLine");
+  assert.ok(!long.test(S.dumbbell(1.123456, 9.987654, 5.555555, o)), "dumbbell");
+  // The size options must actually reach the markup, not be silently dropped.
+  assert.match(S.dumbbell(1, 9, 5, Object.assign({}, o, { r: 7 })), /r="7"/);
+  assert.match(S.rule(0, 10, 5, { stroke: "#000", width: 3 }), /stroke-width="3"/);
+  assert.match(S.pathLine([[0, 0], [1, 1]], { stroke: "#000", width: 2.5 }),
+    /stroke-width="2.5"/);
 });

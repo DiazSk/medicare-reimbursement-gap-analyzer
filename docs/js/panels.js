@@ -4,7 +4,7 @@
 (function (root) {
   "use strict";
 
-  const { money, count, pct, quantile } = root.MD.format;
+  const { money, moneyTick, count, pct, quantile } = root.MD.format;
   const { tokens, axisOpts, legendOpts, tooltipOpts, mount } = root.MD.charts;
   const { reliability, patternPitch, isReliable } = root.MD.guardrails;
   const { hatch } = root.MD.charts;
@@ -297,7 +297,7 @@
       rows: pick,
       label: (r) => r.state,
       value: (r) => r.premium,
-      fmt: (v) => money(v, 1),
+      fmt: moneyTick,
       fmtValue: (v) => money(v),
       signed: true,
       axisTitle: "Geographic premium (paid − standardized)",
@@ -536,7 +536,7 @@
       rows: j,
       label: (d) => d.hcpcs,
       value: (d) => d.pymt,
-      fmt: (v) => money(v, 1),
+      fmt: moneyTick,
       fmtValue: (v) => money(v),
       axisTitle: "Medicare payment",
       aria: "Largest drug codes by Medicare payment",
@@ -709,11 +709,11 @@
             tip: `${d.hcpcs} · facility ${money(d.f_pymt)} · `
               + `office ${money(d.o_pymt)} · ${count(d.f_svcs)} facility services` });
       }
-      body += S.axisBottom(x, H - padB, (v) => money(v, 1),
+      body += S.axisBottom(x, H - padB, moneyTick,
         { axis: t.axis, muted: t.muted });
       for (const tick of y.ticks(5)) {
         body += `<text x="${padL - 8}" y="${y(tick) + 3.5}" text-anchor="end" `
-          + `font-size="10.5" fill="${t.muted}">${money(tick, 1)}</text>`;
+          + `font-size="10.5" fill="${t.muted}">${moneyTick(tick)}</text>`;
       }
       body += `<text x="${padL}" y="${H - 6}" font-size="10.5" fill="${t.muted}">`
         + `Office (non-facility) payment per service</text>`;
@@ -732,7 +732,7 @@
       rows: bar,
       label: (d) => d.hcpcs,
       value: (d) => d.savings,
-      fmt: (v) => money(v, 1),
+      fmt: moneyTick,
       fmtValue: (v) => money(v),
       signed: true,
       axisTitle: "Facility premium (negative = office pays more)",

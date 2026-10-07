@@ -215,12 +215,62 @@ test("every name a module destructures from window.MD is actually exported", () 
   assert.ok(checked > 5, `expected to check several imports, checked ${checked}`);
 });
 
-test("no panels.js axis formats money with zero digits", () => {
+/* Every money( call whose LAST top-level argument is the literal 0 or 1. Written as a
+   paren-balanced scan rather than a regex: the first argument can be any expression --
+   money(Math.round(v), 0), money(d.pymt, 0), money(a[i] / 2, 1) -- and a regex that
+   tries to match it either misses those or over-matches across calls. */
+function zeroOrOneDigitMoney(src) {
+  const hits = [];
+  for (const m of src.matchAll(/\bmoney\(/g)) {
+    let depth = 1, i = m.index + m[0].length, lastComma = -1;
+    for (; i < src.length && depth > 0; i++) {
+      const c = src[i];
+      if (c === "(" || c === "[" || c === "{") depth++;
+      else if (c === ")" || c === "]" || c === "}") depth--;
+      else if (c === "," && depth === 1) lastComma = i;
+    }
+    if (lastComma < 0) continue;
+    if (/^\s*[01]\s*$/.test(src.slice(lastComma + 1, i - 1))) hits.push(src.slice(m.index, i));
+  }
+  return hits;
+}
+
+test("no money() call in panels.js passes a literal 0 or 1 digit count", () => {
   /* money(1.5e9, 0) renders "$2B" -- wrong by half a billion, and distinct from
-     "$1B", so axisBottom's duplicate-label fallback never fires on it. svg.test.js
-     pins the renderer's behaviour; only a source check notices a panels.js call site
-     that was missed or reverted, which is the same reason the token and sentinel
-     guards above read the source rather than the output. */
-  const src = read("js/panels.js");
-  assert.deepEqual(src.match(/money\(\w+, *0\)/g), null);
+     "$1B", so axisBottom's duplicate-label fallback never fires on it. Axes use
+     moneyTick. Currency passes 2 (cents) or nothing, so 0 and 1 are never legitimate
+     in panels.js. Only a source check notices a call site that was missed or reverted,
+     which is why the token and sentinel guards above read the source too. */
+  assert.deepEqual(zeroOrOneDigitMoney(read("js/panels.js")), []);
+});
+
+test("the money-digits guard catches every spelling it exists for", () => {
+  // The first version of this guard used /money\(\w+, *0\)/ and missed the last three.
+  for (const bad of ["money(v, 0)", "money(tick, 0)", "money(Math.round(v), 0)",
+                     "money(d.pymt, 0)", "money(a[i] / 2, 1)", "money( v ,0 )"]) {
+    assert.equal(zeroOrOneDigitMoney(`x = ${bad};`).length, 1, bad);
+  }
+  for (const ok of ["money(v)", "money(v, 2)", "money(Math.abs(d.x), 2)", "money(f(0), 2)",
+                    "moneyTick(v)"]) {
+    assert.deepEqual(zeroOrOneDigitMoney(`x = ${ok};`), [], ok);
+  }
+});
+
+test("every mountSvg chart is a <div> host, and no page draws on a <canvas>", () => {
+  /* Derived from panels.js, not hardcoded: add a mountSvg call and this demands a
+     <div> for it. Without this, putting the id back on a <canvas> passed the whole
+     suite -- host.innerHTML on a canvas sets its never-rendered fallback content, so
+     the panel is a blank box with no console error. */
+  const ids = [...read("js/panels.js").matchAll(/\bmountSvg\("([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(ids.length >= 5, `expected the mountSvg ids, found ${ids.length}`);
+  for (const id of new Set([...ids, "cLorenz", "cSite"])) {
+    assert.match(index, new RegExp(`<div[^>]*\\bid="${id}"`), `#${id} must be a <div> in index.html`);
+  }
+  assert.equal(index.match(/<canvas/g), null, "index.html must have no <canvas");
+  /* explore.html's pChart is the one remaining Chart.js canvas; Task 9 converts it.
+     This is an allowlist of exactly one, so a SECOND canvas is still a failure, and
+     Task 9 should empty it. */
+  assert.deepEqual([...explore.matchAll(/<canvas[^>]*\bid="([^"]+)"/g)].map((m) => m[1]),
+                   ["pChart"]);
+  assert.equal((explore.match(/<canvas/g) || []).length, 1);
 });

@@ -11,7 +11,7 @@ global.window = {};
 eval(fs.readFileSync(path.join(__dirname, "svg.js"), "utf8"));
 const S = global.window.MD.svg;
 eval(fs.readFileSync(path.join(__dirname, "format.js"), "utf8"));
-const money = global.window.MD.format.money;
+const { money, moneyTick } = global.window.MD.format;
 
 test("scaleLinear maps domain ends to range ends exactly", () => {
   const x = S.scaleLinear([0, 100], [0, 500]);
@@ -641,13 +641,13 @@ test("dumbbellPlot renders prose for a zero-row cohort", () => {
   assert.match(out, /class="empty"/);
 });
 
-test("a money(v, 1) axis labels 1.5e9 as $1.5B, never rounds it to $2B", () => {
+test("a moneyTick axis labels 1.5e9 as $1.5B, never rounds it to $2B", () => {
   // cSiteBar's last tick sat at 1.5e9 and read "$2B": wrong by half a billion, and
   // distinct from "$1B" so the duplicate-label net never fired.
   const rows = [{ k: "a", v: 1.5e9 }, { k: "b", v: 5e8 }];
   const out = S.dotPlot({
     t: TK, rows, label: (r) => r.k, value: (r) => r.v,
-    fmt: (v) => money(v, 1), fmtValue: (v) => money(v),
+    fmt: moneyTick, fmtValue: (v) => money(v),
     axisTitle: "x", aria: "y", tip: (r) => r.k,
   });
   const ticks = [...out.matchAll(/text-anchor="middle"[^>]*>([^<]*)</g)].map((m) => m[1]);

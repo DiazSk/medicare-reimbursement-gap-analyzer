@@ -200,7 +200,7 @@
     /* A brief formatter can render two neighbouring ticks identically (a 0-decimal
        one turns 1.5e9 and 2e9 both into "$2B"), which puts two identical labels on
        one axis -- worse than an imprecise one, because it reads as a repeated datum.
-       The shipped axes use money(v, 1), which keeps those apart; this is the net for
+       The shipped axes use moneyTick, which keeps those apart; this is the net for
        any formatter that does not. Fall back to the precise formatter ONLY when the brief one
        collides, so axes that do not collide keep their short labels. */
     let f = fmt;
@@ -288,7 +288,7 @@
                        : scaleLinear([lo, hi], [x0, x1]);
     const band = scaleBand(labels, [padT, padT + rows.length * rowH], 0);
 
-    // The axis wants brevity; this column wants precision. The axis's money(v, 1)
+    // The axis wants brevity; this column wants precision. The axis's moneyTick
     // renders $2.35B and $1.86B as "$2.4B" and "$1.9B", and the dot's position already
     // carries magnitude -- this text is the only place the exact figure appears on the chart.
     const fmtValue = spec.fmtValue || spec.fmt;

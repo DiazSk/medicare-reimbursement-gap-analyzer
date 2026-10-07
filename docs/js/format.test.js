@@ -42,3 +42,14 @@ test("quantile indexes a pre-sorted array and clamps at the ends", () => {
   assert.equal(F.quantile(xs, 1), 10);
   assert.equal(F.quantile([], 0.5), 0);
 });
+
+test("money honours its digits argument below 1000, not just above", () => {
+  // The final branch used to hardcode toFixed(2), so an axis passing 0 still got
+  // "$200.00". That reached three axes before anyone noticed.
+  assert.equal(F.money(200, 0), "$200");
+  assert.equal(F.money(0, 0), "$0");
+  assert.equal(F.money(503.53, 0), "$504");
+  assert.equal(F.money(12.5, 1), "$12.5");
+  // The default is unchanged.
+  assert.equal(F.money(12.5), "$12.50");
+});

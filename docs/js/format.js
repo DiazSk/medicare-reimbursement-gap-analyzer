@@ -10,7 +10,7 @@
     if (a >= 1e9) return s + (a / 1e9).toFixed(digits ?? 2) + "B";
     if (a >= 1e6) return s + (a / 1e6).toFixed(digits ?? 1) + "M";
     if (a >= 1e3) return s + (a / 1e3).toFixed(digits ?? 1) + "K";
-    return s + a.toFixed(2);
+    return s + a.toFixed(digits ?? 2);
   }
 
   function count(v) {

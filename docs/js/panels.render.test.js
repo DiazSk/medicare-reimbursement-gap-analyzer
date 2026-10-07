@@ -36,9 +36,11 @@ const view = {
   providers: DATA.providers, kpi: DATA.kpi,
 };
 P.renderHero3(view);
+P.renderHero4(view);
 P.renderHero5(view);
 const lorenz = hosts.cLorenz.innerHTML;
 const site = hosts.cSite.innerHTML;
+const cred = hosts.cCred.innerHTML;
 
 const num = (s, k) => Number(new RegExp(`\\b${k}="([^"]+)"`).exec(s)[1]);
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) <= 0.011, `${msg}: ${a} vs ${b}`);
@@ -166,4 +168,48 @@ test("neither inline chart leaks NaN, Infinity or undefined into the markup", ()
       assert.ok(!html.includes(bad), `${name} contains ${bad}`);
     }
   }
+});
+
+/* Hero 4 is the one chart built from HTML spans rather than SVG, so it never went
+   through svg.js's tipParts() and kept hand-written title="" attributes -- the
+   browser's own grey, delayed tooltip, visibly different from the styled box every
+   other chart shows. */
+
+test("the heatmap's cells carry structured tip parts, like every other chart", () => {
+  const cells = [...cred.matchAll(/<span class="hmcell"[^>]*>/g)].map((m) => m[0]);
+  assert.ok(cells.length >= 12, `expected a matrix of cells, found ${cells.length}`);
+  for (const c of cells) {
+    assert.match(c, /data-tip-label="[^"]+"/, `cell has no tip label: ${c}`);
+    assert.match(c, /data-tip-value="[^"]+"/, `cell has no tip value: ${c}`);
+    assert.match(c, /data-tip-note="[^"]+"/, `cell has no tip note (the tier): ${c}`);
+  }
+});
+
+test("the heatmap emits no title attribute, so no native tooltip competes", () => {
+  /* In SVG a <title> CHILD is the screen-reader fallback and shows nothing on its
+     own. In HTML the title ATTRIBUTE *is* the native tooltip, so leaving it beside
+     data-tip would render both at once -- the styled box and the grey one under it. */
+  assert.equal(cred.match(/\stitle="/g), null,
+    "a title attribute survives in the heatmap and will show a native tooltip");
+});
+
+test("the heatmap announces each cell's full meaning to a screen reader", () => {
+  // Dropping title must not cost the announcement: a cell's text is just "2.06x",
+  // which says nothing about which code or which credential tier it belongs to.
+  const cells = [...cred.matchAll(/<span class="hmcell"[^>]*>/g)].map((m) => m[0]);
+  for (const c of cells) {
+    assert.match(c, /aria-label="[^"]+"/, `cell has no aria-label: ${c}`);
+  }
+  assert.match(cred, /<span class="hmcode"[^>]*aria-label="[^"]+"/,
+    "the row header lost the procedure description it used to carry in title");
+});
+
+test("a heatmap cell's tip names its code, its ratio and its tier", () => {
+  const m = /<span class="hmcell"[^>]*data-tip-label="([^"]+)"[^>]*data-tip-value="([^"]+)"[^>]*data-tip-note="([^"]+)"/.exec(cred)
+    || /<span class="hmcell"[^>]*>/.exec(cred);
+  assert.ok(m && m.length === 4, `tip parts are not in label/value/note order: ${m && m[0]}`);
+  const [, label, value, note] = m;
+  assert.match(label, /^\d{5}$/, `label should be the HCPCS code, got "${label}"`);
+  assert.match(value, /^\d+\.\d{2}x allowed$/, `value should be the ratio, got "${value}"`);
+  assert.ok(note.length > 2, `note should be the credential tier, got "${note}"`);
 });

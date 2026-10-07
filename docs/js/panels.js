@@ -599,16 +599,28 @@
       + tiers.map(t => `<span role="columnheader">${esc(TIER_LABELS[t])}</span>`).join("")
       + `</div>`;
     const body = rows.map(d => `<div class="hmrow" role="row">`
-      + `<span class="hmcode" role="rowheader" title="${esc(d.desc)}">${esc(d.hcpcs)}</span>`
+      + `<span class="hmcode" role="rowheader" aria-label="${esc(d.hcpcs)} · ${esc(d.desc)}"`
+      + ` data-tip-label="${esc(d.hcpcs)}" data-tip-value="${esc(d.desc)}">${esc(d.hcpcs)}</span>`
       + tiers.map(t => {
           const v = d[t];
           if (v === null || v === undefined) {
             return `<span class="hmcell hmna" role="cell">&mdash;</span>`;
           }
           const bin = cellBin(v);
+          /* The heatmap is HTML, not SVG, so it is the one chart tipParts() cannot
+             build. It carries the same three attributes by hand instead, and
+             aria-label replaces the title it used to have: in HTML the title
+             ATTRIBUTE is the native tooltip, so keeping it would draw the grey
+             system box underneath the styled one. aria-label announces the same
+             thing and renders nothing -- and it is the better announcement anyway,
+             since the cell's own text is only "2.06x". */
+          const label = `${esc(d.hcpcs)} · ${esc(TIER_LABELS[t])} · `
+            + `${v.toFixed(2)}x allowed`;
           return `<span class="hmcell" role="cell" style="background:${ramp[bin]};`
-            + `color:${rampInk(bin)}" `
-            + `title="${esc(d.hcpcs)} · ${esc(TIER_LABELS[t])} · ${v.toFixed(2)}x allowed">`
+            + `color:${rampInk(bin)}" aria-label="${label}" `
+            + `data-tip-label="${esc(d.hcpcs)}" `
+            + `data-tip-value="${v.toFixed(2)}x allowed" `
+            + `data-tip-note="${esc(TIER_LABELS[t])}">`
             + `${v.toFixed(2)}x</span>`;
         }).join("")
       + `</div>`).join("");

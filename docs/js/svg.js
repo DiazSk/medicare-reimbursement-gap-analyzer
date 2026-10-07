@@ -232,8 +232,82 @@
       + body + `</svg>`;
   }
 
+  /* The shared horizontal dot plot: six of the eight converted charts are this
+     shape. One hairline per row, a dot on it, the value as mono text in the right
+     margin -- which is exactly where the reference puts its confidence interval,
+     and where this page has an honest figure to put instead.
+
+     `signed: true` adds the zero rule and makes the default fill follow the sign.
+     `filled` overrides that, because hero 2 needs the channel for reliability. */
+  function dotPlot(spec) {
+    const t = spec.t;
+    const rows = spec.rows || [];
+    if (!rows.length) {
+      return `<p class="empty">No row matches this filter, so there is nothing `
+        + `to plot here.</p>`;
+    }
+
+    const rowH = spec.rowH == null ? 26 : spec.rowH;
+    const W = spec.width == null ? 760 : spec.width;
+    const labels = rows.map(spec.label);
+    const gutter = Math.min(220, labelWidth(labels, 10.5) + 14);
+    const valW = 86;
+    const padT = 8, padB = 34;
+    const H = padT + rows.length * rowH + padB;
+    const x0 = gutter, x1 = W - valW;
+
+    const vals = rows.map(spec.value).filter((v) => Number.isFinite(v));
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    if (spec.signed) { lo = Math.min(0, lo); hi = Math.max(0, hi); }
+    const x = spec.log ? scaleLog([Math.max(1, lo), hi], [x0, x1])
+                       : scaleLinear([lo, hi], [x0, x1]);
+    const band = scaleBand(labels, [padT, padT + rows.length * rowH], 0);
+
+    let body = "";
+
+    /* The selection band is drawn FIRST, so it sits behind every mark -- a band
+       that covers the dot it is selecting is worse than no band. dotPlot resolves
+       it from a predicate rather than taking pre-built markup, so callers never
+       have to know rowH, padT or the frame width. */
+    if (spec.highlight) {
+      for (const r of rows) {
+        if (!spec.highlight(r)) continue;
+        const y = band(spec.label(r));
+        body += `<rect x="0" y="${y - rowH / 2}" width="${W}" `
+          + `height="${rowH}" fill="${spec.seal || t.seal}"/>`;
+      }
+    }
+
+    for (const r of rows) {
+      const label = spec.label(r);
+      const v = spec.value(r);
+      const y = band(label);
+      body += rule(x0, x1, y, { stroke: t.hair });
+      if (!Number.isFinite(v)) continue;
+      const filled = spec.filled ? !!spec.filled(r)
+        : spec.signed ? v >= 0 : true;
+      body += dot(x(v), y, 4.5,
+        { filled, series: t.series, sheet: t.sheet, tip: spec.tip(r) });
+      body += `<text x="${W - valW + 8}" y="${y + 3.5}" font-size="10.5" `
+        + `fill="${t.ink2}">${esc(spec.fmt(v))}</text>`;
+    }
+
+    if (spec.signed) {
+      body += zeroRule(x, padT, padT + rows.length * rowH, { ink: t.ink1 });
+    }
+    body += axisLeft(labels, band, gutter - 10,
+      { muted: t.ink2, ink: t.ink1, emphasis: spec.emphasis, family: spec.family });
+    body += axisBottom(x, padT + rows.length * rowH + 6, spec.fmt,
+      { axis: t.axis, muted: t.muted });
+    body += `<text x="${x0}" y="${H - 4}" font-size="10.5" fill="${t.muted}">`
+      + `${esc(spec.axisTitle)}</text>`;
+
+    return frame(W, H, body, { aria: spec.aria });
+  }
+
   root.MD = root.MD || {};
   root.MD.svg = { esc, scaleLinear, scaleLog, scaleBand, niceTicks,
                   rule, dot, dumbbell, pathLine, bubble,
-                  axisBottom, axisLeft, labelWidth, zeroRule, frame };
+                  axisBottom, axisLeft, labelWidth, zeroRule, frame,
+                  dotPlot };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -249,7 +249,15 @@
      the element: at 1.15fr of a two-column split it rendered at 0.56 and put the state
      codes at 5.3px. Full measure puts them back over 10px. */
   .split.stacked { grid-template-columns: 1fr; }
+  /* Sizes an SVG child now, not a canvas. height:auto because an SVG scales to
+     its viewBox and a fixed height would letterbox it. The canvas-holding boxes
+     (still Chart.js until the later tasks convert them) keep their fixed height. */
   .chartbox { position: relative; height: 330px; }
+  .chartbox:not(:has(canvas)) { height: auto; }
+  .chartbox > svg { width: 100%; height: auto; display: block; }
+  .chartbox svg text { font-family: var(--font-mono); }
+  .figtitle { font-size: 13px; font-weight: 600; margin: 0 0 8px;
+    color: var(--ink); }
   .chartbox.tall { height: 430px; }
 
   /* Choropleth over real geometry (us-atlas albers variant, inlined by

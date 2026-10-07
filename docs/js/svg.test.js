@@ -322,3 +322,77 @@ test("frame escapes its aria-label, which carries free-text specialty names", ()
   const f = S.frame(100, 50, "<circle/>", { aria: 'Obstetrics & Gynecology "x"' });
   assert.match(f, /aria-label="Obstetrics &amp; Gynecology &quot;x&quot;"/);
 });
+
+/* ── dotPlot ─────────────────────────────────────────────────────────────────
+   The shared renderer behind six of the eight converted charts. A pure string
+   builder: tokens arrive in spec.t, so there is nothing to stub. */
+const TK = { hair: "#c9c7c4", series: "#2a78d6", sheet: "#f5f4f6", ink1: "#16181a",
+             ink2: "#4f5156", muted: "#6b6d72", axis: "#c9c7c4", seal: "#dcddf3",
+             whisker: "#86b6ef", sans: "sans-serif" };
+
+test("dotPlot draws one dot and one hairline per row", () => {
+  const rows = [{ k: "J0178", v: 100 }, { k: "J9271", v: 50 }];
+  const out = S.dotPlot({
+    t: TK, rows, label: (r) => r.k, value: (r) => r.v,
+    fmt: (v) => "$" + v, axisTitle: "Payment", aria: "test", tip: (r) => r.k,
+  });
+  assert.equal((out.match(/<circle/g) || []).length, 2, "one dot per row");
+  assert.ok((out.match(/<line/g) || []).length >= 2, "one hairline per row");
+  assert.match(out, /J0178/);
+  assert.match(out, /J9271/);
+});
+
+test("dotPlot renders prose, not an empty chart, for a zero-row cohort", () => {
+  // Review Focus 1. An axis with no marks looks like a broken chart; a sentence
+  // saying nothing matched is the honest version.
+  const out = S.dotPlot({
+    t: TK, rows: [], label: (r) => r.k, value: (r) => r.v,
+    fmt: String, axisTitle: "x", aria: "y", tip: String,
+  });
+  assert.ok(!out.includes("<svg"), "no frame should be drawn at all");
+  assert.match(out, /class="empty"/, "an explained empty state is required");
+});
+
+test("dotPlot survives a single row without NaN coordinates", () => {
+  // Review Focus 2: a one-cohort filter gives a zero-width value domain.
+  const out = S.dotPlot({
+    t: TK, rows: [{ k: "only", v: 42 }], label: (r) => r.k, value: (r) => r.v,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  assert.ok(!out.includes("NaN"), `NaN leaked into the markup: ${out.slice(0, 200)}`);
+  assert.equal((out.match(/<circle/g) || []).length, 1);
+});
+
+test("dotPlot with signed:true draws a zero rule and hollows the negatives", () => {
+  const rows = [{ k: "up", v: 10 }, { k: "down", v: -10 }];
+  const out = S.dotPlot({
+    t: TK, rows, label: (r) => r.k, value: (r) => r.v, signed: true,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  assert.match(out, /fill="#f5f4f6"/, "the negative row should be hollow");
+  assert.match(out, /fill="#2a78d6"/, "the positive row should be filled");
+});
+
+test("dotPlot's filled predicate overrides the sign default", () => {
+  // Hero 2 needs filled/hollow for RELIABILITY, not sign -- position across the
+  // zero rule already carries sign, so the channel is free.
+  const rows = [{ k: "thin", v: 10, ok: false }];
+  const out = S.dotPlot({
+    t: TK, rows, label: (r) => r.k, value: (r) => r.v, signed: true,
+    filled: (r) => r.ok,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  assert.ok(/fill="#f5f4f6"/.test(out),
+    "a positive but unreliable row must still be hollow");
+});
+
+test("dotPlot escapes free-text labels and tips", () => {
+  // Review Focus 5.
+  const out = S.dotPlot({
+    t: TK, rows: [{ k: "Obstetrics & Gynecology", v: 1 }],
+    label: (r) => r.k, value: (r) => r.v,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  assert.match(out, /Obstetrics &amp; Gynecology/);
+  assert.ok(!/Obstetrics & Gyn/.test(out));
+});

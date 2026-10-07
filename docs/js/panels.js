@@ -68,6 +68,7 @@
   // The viewBox origin is NEGATIVE because the albers geometry starts at x = -58
   // (Alaska). A "0 0 975 610" box clips it; this cost a rebuild to find.
   const VIEWBOX = "-60 12 1085 595";
+  const V = () => root.MD.svg;
   // Callout labels for areas too small to hold one sit in a right margin at this x.
   const GUTTER_X = 952;
 
@@ -570,33 +571,18 @@
     });
 
     const j = view.jcodeTop.slice(0, 15).slice().reverse();
-    mount("cJcode", {
-      type: "bar",
-      data: {
-        labels: j.map(d => d.hcpcs),
-        datasets: [{ label: "National Medicare payment", data: j.map(d => d.pymt),
-                     backgroundColor: T().series, borderWidth: 0 }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(false),
-                    title: { text: "Largest drug codes by Medicare payment" },
-          tooltip: tooltipOpts({
-            title: c => j[c[0].dataIndex].hcpcs,
-            label: c => ` ${money(c.raw)}`,
-            afterLabel: c => {
-              const d = j[c.dataIndex];
-              return [d.desc, `${count(d.providers)} providers`];
-            },
-          }),
-        },
-        scales: {
-          x: axisOpts("Medicare payment", v => money(v, 0)),
-          y: axisOpts(null, null, { grid: { display: false } }),
-        },
-      },
-    });
+    document.getElementById("cJcode").innerHTML =
+      `<h3 class="figtitle">Largest drug codes by Medicare payment</h3>`
+      + V().dotPlot({
+          t: T(),
+          rows: j,
+          label: (d) => d.hcpcs,
+          value: (d) => d.pymt,
+          fmt: (v) => money(v, 0),
+          axisTitle: "Medicare payment",
+          aria: "Largest drug codes by Medicare payment",
+          tip: (d) => `${d.hcpcs} · ${money(d.pymt)} · ${count(d.providers)} providers`,
+        });
 
     document.getElementById("h3read").textContent = hero3Read(view);
   }

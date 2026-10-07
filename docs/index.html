@@ -142,7 +142,7 @@
      equally) to 1 (one provider bills everything).</p>
   <div class="split">
     <div class="chartbox"><canvas id="cLorenz"></canvas></div>
-    <div class="chartbox"><canvas id="cJcode"></canvas></div>
+    <div class="chartbox" id="cJcode"></div>
   </div>
   <p class="read" id="h3read"></p>
   <div class="pcap"><span>Pl. III &middot; Drug-spend concentration &middot; Unit: provider (NPI)</span><span class="src">Source <code>gold_hero_jcode_concentration</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 7</span></div>
@@ -285,6 +285,7 @@
 <script src="js/charts.js"></script>
 <script src="js/guardrails.js"></script>
 <script src="js/us-states.js"></script>
+<script src="js/svg.js"></script>
 <script src="js/panels.js"></script>
 <!-- engine.js and live.js load before the boot script rather than after it, so
      the toggle can bind window.MD.live at parse time instead of lazily. -->

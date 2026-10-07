@@ -75,6 +75,9 @@
 
     --seal: #dcddf3;   /* ink on seal 13.29:1 */
     --bar: 60px;
+    /* Registration crosshair, used four times by .plate. --hair is too faint to read at
+       12px, so the mark is --ink-3 at low opacity. Not read by JS, so url() is fine. */
+    --regmark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M6 0v12M0 6h12' stroke='%236b6d72' stroke-width='.7' opacity='.55'/%3E%3C/svg%3E");
     --radius: 0;
     --gap: 18px;
     /* charts.js:readTokens() reads --font-sans into Chart.defaults.font.family. */
@@ -111,7 +114,7 @@
      carries its own .wrap inside to keep the 1240px measure. Both are sticky;
      the band's top offset is the bar's height, so they stack instead of
      overlapping. --bar must stay in sync with html's scroll-padding-top. */
-  .bar { position: sticky; top: 0; z-index: 40; height: var(--bar);
+  .bar { position: sticky; top: 0; z-index: 40; min-height: var(--bar);
     display: flex; align-items: center; background: var(--sheet);
     border-bottom: 1px solid var(--hair); }
   .bar > .wrap { display: flex; align-items: center; gap: 24px; width: 100%;
@@ -197,11 +200,35 @@
     color: var(--ink); border: 1px solid var(--ink-3); border-radius: var(--radius); padding: 10px; }
 
   /* cards */
-  .card { background: var(--sheet); border: 1px solid var(--hair);
-    border-radius: var(--radius); padding: 20px 22px; margin-bottom: var(--gap); }
-  .card > h2 { font-size: 19px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  .card .why { color: var(--ink-2); font-size: 13.5px; margin: 0 0 4px; max-width: 88ch; }
-  .card .read { color: var(--ink-3); font-size: 12.5px; margin: 8px 0 0; max-width: 92ch; }
+  /* A plate, not a card. Four registration crosshairs as background LAYERS on one
+     element -- zero extra markup, works on all eight plate variants, and leaves both
+     pseudo-elements free.
+
+     background-color is declared as a LONGHAND on purpose. The `background` shorthand
+     resets background-image, so one shorthand anywhere in this rule (or in a later rule
+     that wins) silently wipes all four crosshairs with no error. */
+  .plate { background-color: var(--sheet); border: 1px solid var(--hair);
+    border-radius: var(--radius); padding: 20px 22px; margin-bottom: var(--gap);
+    background-image: var(--regmark), var(--regmark), var(--regmark), var(--regmark);
+    background-repeat: no-repeat;
+    background-origin: border-box;
+    background-size: 12px 12px;
+    background-position: left 7px top 7px, right 7px top 7px,
+                         left 7px bottom 7px, right 7px bottom 7px; }
+  .plate > h2 { font-size: 19px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .plate .why { color: var(--ink-2); font-size: 13.5px; margin: 0 0 4px; max-width: 88ch; }
+  .plate .read { color: var(--ink-3); font-size: 12.5px; margin: 8px 0 0; max-width: 92ch; }
+  /* Every plate names its own source. Nothing in the build asserts the
+     panel -> mart -> notebook-cell mapping, so docs/js/lineage.test.js does. */
+  .pcap { display: flex; flex-wrap: wrap; gap: 10px 24px;
+    justify-content: space-between; align-items: baseline;
+    margin: 18px 0 0; padding-top: 10px; border-top: 1px solid var(--ink);
+    font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-3); }
+  .pcap .src { text-align: right; }
+  .pcap code { font-size: 10.5px; text-transform: none; letter-spacing: 0.02em;
+    color: var(--ink-2); }
+
   .eyebrow { display: flex; align-items: center; gap: 9px; margin-bottom: 9px;
     font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--ink-3); }
@@ -254,6 +281,19 @@
   /* --series is 4.03:1 and illegal as text; --link is the 7.39:1 one. */
   a { color: var(--link); }
 
+  @media (max-width: 720px) {
+    /* Six mono-caps items cannot fit at phone width, and a wrapped nav grows out of the
+       bar and over the band. Sections stay reachable by scrolling. */
+    .nav { display: none; }
+    /* A 194px sticky band at 375px eats a quarter of the viewport. */
+    .band { position: static; }
+    .band > .wrap { padding-top: 14px; padding-bottom: 14px; }
+    .pcap { font-size: 10px; letter-spacing: 0.05em; }
+    .pcap .src { text-align: left; }
+    .seal { width: 104px; height: 104px; }
+    .plate { padding: 18px 16px; }
+  }
+
   @media (max-width: 860px) {
     .split { grid-template-columns: 1fr; }
     .filters .hint { text-align: left; margin-left: 0; }
@@ -262,7 +302,7 @@
   }
   @media print {
     .filters, .toggle, .pager { display: none; }
-    .card { break-inside: avoid; border-color: #ccc; }
+    .plate { break-inside: avoid; border-color: #ccc; }
     body { background: #fff; }
   }
 

@@ -90,7 +90,7 @@
 
 
 <!-- HERO 1 -->
-<section class="card" id="pl1">
+<section class="plate" id="pl1">
   <div class="eyebrow"><span class="n">Hero 01</span> Geographic arbitrage
     <span class="chip">Responds to: State · RUCA</span></div>
   <h2 id="h1title">The same procedure costs more depending on the ZIP code it is billed from</h2>
@@ -110,10 +110,11 @@
     <div class="chartbox tall"><canvas id="cGeo"></canvas></div>
   </div>
   <p class="read" id="h1read"></p>
+  <div class="pcap"><span>Pl. I &middot; Geographic premium per beneficiary-proxy &middot; Unit: state</span><span class="src">Source <code>gold_hero_geo_arbitrage</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 3</span></div>
 </section>
 
 <!-- HERO 2 -->
-<section class="card" id="pl2">
+<section class="plate" id="pl2">
   <div class="eyebrow"><span class="n">Hero 02</span> The participation loophole
     <span class="chip">Responds to: Specialty</span>
     <span class="badge-reliability" id="badgeH2" hidden></span></div>
@@ -130,10 +131,11 @@
   </div>
   <p class="read" id="h2read"></p>
   <p class="read" id="h2caveat"></p>
+  <div class="pcap"><span>Pl. II &middot; Non-participation premium by specialty &middot; Unit: specialty</span><span class="src">Source <code>gold_hero_non_par_premium</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 5</span></div>
 </section>
 
 <!-- HERO 3 -->
-<section class="card" id="pl3">
+<section class="plate" id="pl3">
   <div class="eyebrow"><span class="n">Hero 03</span> Drug-spend concentration
     <span class="chip" id="chipH3">National</span></div>
   <h2>Medicare's drug spending is concentrated in a very small number of prescribers</h2>
@@ -145,10 +147,11 @@
     <div class="chartbox"><canvas id="cJcode"></canvas></div>
   </div>
   <p class="read" id="h3read"></p>
+  <div class="pcap"><span>Pl. III &middot; Drug-spend concentration &middot; Unit: provider (NPI)</span><span class="src">Source <code>gold_hero_jcode_concentration</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 7</span></div>
 </section>
 
 <!-- HERO 4 -->
-<section class="card" id="pl4">
+<section class="plate" id="pl4">
   <div class="eyebrow"><span class="n">Hero 04</span> The credentials markup cliff
     <span class="chip">National</span></div>
   <h2>On identical office-visit codes, nurse practitioners and PAs submit <em>higher</em>
@@ -161,10 +164,11 @@
        below 3:1 against the light surface; it is also just easier to read exactly. -->
   <div class="tblwrap"><table id="tCred"></table></div>
   <p class="read" id="h4read"></p>
+  <div class="pcap"><span>Pl. IV &middot; Submitted-to-allowed markup by credential &middot; Unit: HCPCS &times; credential</span><span class="src">Source <code>gold_hero_credentials_markup</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 9</span></div>
 </section>
 
 <!-- HERO 5 -->
-<section class="card" id="pl5">
+<section class="plate" id="pl5">
   <div class="eyebrow"><span class="n">Hero 05</span> Site-of-service differential
     <span class="chip">National</span></div>
   <h2>The same procedure pays the physician <em>less</em> in a facility — because half the fee
@@ -180,10 +184,11 @@
   </div>
   <p class="read" id="h5read"></p>
   <p class="read" id="h5caveat"></p>
+  <div class="pcap"><span>Pl. V &middot; Site-of-service differential &middot; Unit: HCPCS</span><span class="src">Source <code>gold_hero_site_neutral</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 11</span></div>
 </section>
 
 <!-- DETAIL -->
-<section class="card" id="plD">
+<section class="plate" id="plD">
   <div class="eyebrow"><span class="n">Detail</span> Provider outlier explorer
     <span class="chip">Responds to: State · Specialty</span></div>
   <h2>Providers whose Medicare revenue is mostly drug reimbursement</h2>
@@ -193,6 +198,7 @@
      not an allegation about any provider.</p>
   <div class="tblwrap"><table id="tProv"></table></div>
   <div class="pager" id="provPager"></div>
+  <div class="pcap"><span>Pl. VI &middot; Drug-dependent provider detail &middot; Unit: provider (NPI)</span><span class="src">Source <code>gold_hero_jcode_concentration</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 7</span></div>
 </section>
 
 <footer class="page" id="notes">
@@ -281,8 +287,11 @@ function viewFromPayload() {
    no-JS case. */
 (function stickyOffset() {
   const stack = [".bar", ".band"].map(sel => document.querySelector(sel));
+  // Only count what is actually sticky at this width: below 720px the band goes static,
+  // and summing it anyway would reserve its full height for nothing.
+  const sticky = (el) => el && ["sticky", "fixed"].includes(getComputedStyle(el).position);
   const set = () => document.documentElement.style.setProperty("--stick",
-    stack.reduce((h, el) => h + (el ? el.offsetHeight : 0), 0) + "px");
+    stack.reduce((h, el) => h + (sticky(el) ? el.offsetHeight : 0), 0) + "px");
   set();
   addEventListener("resize", set, { passive: true });
 })();

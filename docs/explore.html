@@ -23,7 +23,7 @@
   </div>
 </header>
 
-<section class="card">
+<section class="plate">
   <div class="eyebrow"><span class="n">Pivot</span> Build your own breakdown</div>
   <div class="filters">
     <div class="f"><label for="pRows">Rows</label><select id="pRows"></select></div>
@@ -39,9 +39,10 @@
   <div class="tblwrap"><table id="pTable"></table></div>
   <p class="read">Counts shown are cube rows at the selected grain, not distinct providers —
     arbitrary grains cannot be precomputed. Load the provider table for exact provider counts.</p>
+  <div class="pcap"><span>Pl. VII &middot; Pivot over the published cube &middot; Unit: cube row</span><span class="src">Source <code>cube_dims.parquet</code> &middot; <code>pipeline/build_explorer_data.py</code></span></div>
 </section>
 
-<section class="card">
+<section class="plate">
   <div class="eyebrow"><span class="n">SQL</span> Ask your own question</div>
   <h2>Query the cube directly</h2>
   <p class="why">DuckDB runs entirely in your browser — nothing is uploaded. Two tables are
@@ -59,6 +60,7 @@
   </div>
   <div class="filters" id="sqlExamples"></div>
   <div class="tblwrap"><table id="sqlTable"></table></div>
+  <div class="pcap"><span>Pl. VIII &middot; Direct SQL over the cube &middot; Unit: cube row</span><span class="src">Source <code>cube_full.parquet</code> + <code>providers.parquet</code> &middot; <code>pipeline/build_explorer_data.py</code></span></div>
 </section>
 
 </div>

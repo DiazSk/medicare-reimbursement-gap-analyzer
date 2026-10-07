@@ -73,8 +73,8 @@
         d.title = `${st} — geographic premium ${money(r.premium)} total, `
           + `${money(r.perBene, 2)} per beneficiary-proxy`;
       } else {
-        d.style.background = "var(--plane)";
-        d.style.color = "var(--ink-muted)";
+        d.style.background = "var(--sheet)";
+        d.style.color = "var(--ink-3)";
         d.title = `${st} — no data for this filter`;
       }
       if (filters.state !== "all") d.classList.add(st === filters.state ? "sel" : "dim");

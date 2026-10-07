@@ -19,12 +19,16 @@
     const fam = css("--font-sans");
     if (fam) Chart.defaults.font.family = fam;
 
+    // The OUTPUT keys are a stable interface -- about forty call sites across panels.js,
+    // live.js and explore.js read them -- so only the right-hand sides move here.
+    // `critical` is gone: it was read on every repaint and consumed by nothing.
+    // `grid` and `axis` now resolve to the same hairline; both keys stay because
+    // axisOpts uses them in different slots.
     T = {
-      ink1: css("--ink-1"), ink2: css("--ink-2"), muted: css("--ink-muted"),
-      grid: css("--grid"), axis: css("--axis"), surface: css("--surface-1"),
-      s1: css("--series-1"), s2: css("--series-2"),
+      ink1: css("--ink"), ink2: css("--ink-2"), muted: css("--ink-3"),
+      grid: css("--hair"), axis: css("--hair"), surface: css("--sheet"),
+      s1: css("--series"), s2: css("--series-2"),
       s3: css("--series-3"), s4: css("--series-4"),
-      critical: css("--critical"),
       div: [css("--div-neg2"), css("--div-neg1"), css("--div-mid"),
             css("--div-pos1"), css("--div-pos2")],
     };

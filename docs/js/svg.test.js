@@ -453,3 +453,30 @@ test("dotPlot falls back to fmt when no fmtValue is given", () => {
   });
   assert.ok(out.includes(">5u<"), "fmt must still drive the value column by default");
 });
+
+test("axisBottom falls back to the precise format when ticks would collide", () => {
+  // money(v, 0) renders 1.5e9 and 2e9 both as "$2B". Two identical labels on one axis
+  // read as a repeated datum, which is worse than a long label.
+  const x = S.scaleLinear([0, 2e9], [0, 400]);
+  x.ticks = () => [0, 5e8, 1e9, 1.5e9, 2e9];
+  const brief = (v) => "$" + Math.round(v / 1e9) + "B";
+  const precise = (v) => "$" + (v / 1e9).toFixed(2) + "B";
+  const a = S.axisBottom(x, 200, brief, {
+    axis: "#c9c7c4", muted: "#6b6d72", fmtPrecise: precise,
+  });
+  assert.ok(a.includes(">$1.50B<"), "the colliding pair must separate");
+  assert.ok(a.includes(">$2.00B<"));
+  const labels = [...a.matchAll(/>([^<]+)<\/text>/g)].map((m) => m[1]);
+  assert.equal(new Set(labels).size, labels.length, `duplicate tick labels: ${labels}`);
+});
+
+test("axisBottom keeps the brief format when the ticks do not collide", () => {
+  // The fallback must be a no-op where it is not needed -- cGeo and cNonPar never
+  // collide, and their axes should stay short.
+  const x = S.scaleLinear([0, 200], [0, 400]);
+  const a = S.axisBottom(x, 200, (v) => v + "M", {
+    axis: "#c9c7c4", muted: "#6b6d72", fmtPrecise: (v) => v.toFixed(2) + "M",
+  });
+  assert.ok(a.includes(">100M<"), "a non-colliding axis keeps the brief format");
+  assert.ok(!a.includes("100.00M"), "the precise format must not be used unnecessarily");
+});

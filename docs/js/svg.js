@@ -186,14 +186,27 @@
   }
 
   function axisBottom(scale, y, fmt, o) {
-    const ticks = scale.ticks ? scale.ticks(5) : [];
+    const all = scale.ticks ? scale.ticks(5) : [];
     const r0 = scale.range[0], r1 = scale.range[1];
-    let out = rule(r0, r1, y, { stroke: o.axis, width: 1 });
-    for (const t of ticks) {
+    // Only the ticks that actually land on the drawing. (A scale's own ticks() stays
+    // inside its domain, but a caller may hand over any list.)
+    const drawn = all.filter((t) => {
       const x = scale(t);
-      if (x < r0 - 1 || x > r1 + 1) continue;   // never label off the drawing
-      out += `<text x="${n2(x)}" y="${n2(y + 14)}" text-anchor="middle" `
-        + `font-size="10.5" fill="${o.muted}">${esc(fmt ? fmt(t) : t)}</text>`;
+      return x >= r0 - 1 && x <= r1 + 1;
+    });
+    /* money(v, 0) renders 1.5e9 and 2e9 both as "$2B", which puts two identical
+       labels on one axis -- worse than an imprecise one, because it reads as a
+       repeated datum. Fall back to the precise formatter ONLY when the brief one
+       collides, so axes that do not collide keep their short labels. */
+    let f = fmt;
+    if (o.fmtPrecise && f) {
+      const labels = drawn.map(f);
+      if (new Set(labels).size !== labels.length) f = o.fmtPrecise;
+    }
+    let out = rule(r0, r1, y, { stroke: o.axis, width: 1 });
+    for (const t of drawn) {
+      out += `<text x="${n2(scale(t))}" y="${n2(y + 14)}" text-anchor="middle" `
+        + `font-size="10.5" fill="${o.muted}">${esc(f ? f(t) : t)}</text>`;
     }
     return out;
   }
@@ -304,7 +317,7 @@
     body += axisLeft(labels, band, gutter - 10,
       { muted: t.ink2, ink: t.ink1, emphasis: spec.emphasis, family: spec.family });
     body += axisBottom(x, padT + rows.length * rowH + 6, spec.fmt,
-      { axis: t.axis, muted: t.muted });
+      { axis: t.axis, muted: t.muted, fmtPrecise: fmtValue });
     body += `<text x="${x0}" y="${H - 4}" font-size="10.5" fill="${t.muted}">`
       + `${esc(spec.axisTitle)}</text>`;
 

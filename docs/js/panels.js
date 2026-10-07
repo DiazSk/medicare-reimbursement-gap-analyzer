@@ -570,7 +570,7 @@
       },
     });
 
-    const j = view.jcodeTop.slice(0, 15).slice().reverse();
+    const j = view.jcodeTop.slice(0, 15);
     document.getElementById("cJcode").innerHTML =
       `<h3 class="figtitle">Largest drug codes by Medicare payment</h3>`
       + V().dotPlot({

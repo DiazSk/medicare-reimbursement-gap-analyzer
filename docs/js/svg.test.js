@@ -396,3 +396,21 @@ test("dotPlot escapes free-text labels and tips", () => {
   assert.match(out, /Obstetrics &amp; Gynecology/);
   assert.ok(!/Obstetrics & Gyn/.test(out));
 });
+
+test("dotPlot draws rows top-to-bottom in the order given", () => {
+  // Chart.js's indexAxis:"y" drew index 0 at the BOTTOM; scaleBand puts it at the
+  // TOP. Every array inherited from Chart.js is therefore upside down until it is
+  // re-sorted, and no other assertion can see it -- the markup is valid either way.
+  const rows = [{ k: "top", v: 100 }, { k: "mid", v: 50 }, { k: "bot", v: 10 }];
+  const out = S.dotPlot({
+    t: TK, rows, label: (r) => r.k, value: (r) => r.v,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  const ys = ["top", "mid", "bot"].map((k) => {
+    const m = out.match(new RegExp(`<text x="[\\d.-]+" y="([\\d.-]+)"[^>]*>${k}<`));
+    assert.ok(m, `label ${k} was not drawn`);
+    return Number(m[1]);
+  });
+  assert.ok(ys[0] < ys[1] && ys[1] < ys[2],
+    `rows must descend the page in array order, got y=${ys.join(", ")}`);
+});

@@ -1,3 +1,32 @@
+/* Self-hosted variable woff2, latin subset, both SIL OFL (Schibsted Grotesk, Geist
+   Mono), taken from Google's own CDN. Self-hosted for the same reason
+   chart.umd.min.js is vendored: first paint makes zero external requests.
+
+   The fallback stacks are real stacks, not decoration, because the page has to stay
+   legible with no webfont at all. Measured 2026-10-07: Chrome DOES load these over
+   file:// -- it blocks fetch/XHR on that origin, not font files, and a headless probe
+   got the real face at both paths (277.6px for the same string, against 241.0px
+   fallback). So file:// is not the reason for the fallbacks; a blocked or failed font
+   request on any origin is.
+
+   Every glyph the design actually renders is inside the latin subset -- U+00B7,
+   U+2013, U+2014 and U+2212 are the only non-ASCII ones. A latin-ext character in a
+   provider name falls back per-glyph, which is what Google's own stylesheet does. */
+@font-face {
+  font-family: "Schibsted Grotesk";
+  src: url("../fonts/schibsted-grotesk-var-latin.woff2") format("woff2-variations");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../fonts/geist-mono-var-latin.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
   /* Palette: dataviz reference instance. Categorical slots are assigned in fixed
      order and never cycled.
 
@@ -37,11 +66,14 @@
     --div-pos2: #b02525;
     --radius: 10px;
     --gap: 18px;
+    /* charts.js:readTokens() reads --font-sans into Chart.defaults.font.family. */
+    --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--plane); color: var(--ink-1);
-    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 15px/1.55 var(--font-sans);
   }
   .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 20px 64px; }
 
@@ -78,7 +110,7 @@
     max-width: 44ch; text-align: right; }
   .filters .note { color: var(--ink-muted); font-size: 12px; max-width: 30ch; }
   .filters .f.wide { flex: 1 1 100%; }
-  .sqlbox { width: 100%; font: 13px ui-monospace, monospace; background: var(--plane);
+  .sqlbox { width: 100%; font: 13px var(--font-mono); background: var(--plane);
     color: var(--ink-1); border: 1px solid var(--axis); border-radius: 7px; padding: 10px; }
 
   /* cards */

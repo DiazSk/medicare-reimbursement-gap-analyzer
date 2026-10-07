@@ -420,10 +420,29 @@ function init() {
   // An unsupported browser ignores live=1 silently: the visitor didn't ask for
   // it, only the shared link did, so it degrades to the static summary rather
   // than surfacing an error.
+  // Chart.js measures every label with whatever font is active when the chart is
+  // constructed, and never remeasures. On a cold cache the webfont is still in flight at
+  // first paint, so all eight charts lay out with fallback metrics and the y-axis labels
+  // clip. It shows on a FIRST load only -- invisible on reload and invisible from a warm
+  // worktree, which is why it has to be handled here and cannot be caught in review.
+  // check() is false exactly while the swap is still pending, so a warm cache skips all
+  // of this and pays nothing.
+  const fontPending = !!document.fonts && !document.fonts.check('12px "Schibsted Grotesk"');
+
   if (saved.live === "1" && E.isSupported()) {
-    document.getElementById("fLive").click();
+    // The live handler owns the only paint on this path, and the comment above explains
+    // why a second one is not acceptable here -- it would flash "Live — querying..." over
+    // numbers the first paint already threw away. So wait for the font BEFORE the click
+    // rather than repainting after it.
+    const live = () => { document.getElementById("fLive").click(); };
+    if (fontPending) detach(document.fonts.ready.then(live));
+    else live();
   } else {
-    detach(renderAll());
+    // Repaint after the swap rather than delaying first paint for it: font-display is
+    // swap, so holding the paint would show an empty page on a slow connection.
+    detach(fontPending
+      ? renderAll().then(() => document.fonts.ready).then(() => renderAll())
+      : renderAll());
   }
 }
 if (DATA) init();

@@ -258,6 +258,10 @@
       const pFilterVal = document.getElementById("pFilterVal");
       pFilterVal.value = pick(pFilterVal, saved.filterVal, "all");
 
+      // The engine load normally outlasts the font swap, but don't lean on that:
+      // Chart.js measures pChart's labels once at construction and never remeasures, so
+      // painting before the swap clips them for the rest of the session.
+      if (document.fonts) await document.fonts.ready;
       await run();
     } catch (err) {
       status.textContent = `Could not load the query engine: ${err.message}`;

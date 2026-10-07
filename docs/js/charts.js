@@ -3,7 +3,6 @@
 (function (root) {
   "use strict";
 
-  Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
   Chart.defaults.animation = false;          // many charts on one page
   Chart.defaults.maintainAspectRatio = false;
 
@@ -13,6 +12,13 @@
   let T = {};
 
   function readTokens() {
+    // The family is set here, not at load time, because it now comes from a CSS
+    // custom property: charts.test.js loads this module with no document at all, so a
+    // load-time getComputedStyle would kill its three tests. Guarded on a non-empty
+    // read -- assigning "" would leave Chart.js with no family to measure with.
+    const fam = css("--font-sans");
+    if (fam) Chart.defaults.font.family = fam;
+
     T = {
       ink1: css("--ink-1"), ink2: css("--ink-2"), muted: css("--ink-muted"),
       grid: css("--grid"), axis: css("--axis"), surface: css("--surface-1"),

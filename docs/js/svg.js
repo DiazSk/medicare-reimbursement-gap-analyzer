@@ -35,28 +35,31 @@
   }
 
   /* Counts, so the floor is 1: log(0) is -Infinity and a cohort of zero
-     non-participating providers is ordinary data, not a bug. */
+     non-participating providers is ordinary data, not a bug. A zero-width domain
+     returns the range midpoint, matching scaleLinear -- two sibling scales must not
+     disagree about their degenerate case. */
   function scaleLog(domain, range) {
-    const lo = Math.max(1, domain[0]), hi = Math.max(lo + 1e-9, domain[1]);
+    const lo = Math.max(1, domain[0]);
+    const hi = Math.max(1, domain[1]);
+    const flat = !(hi > lo);
     const l0 = Math.log(lo), l1 = Math.log(hi);
     const r0 = range[0], r1 = range[1];
     const f = (v) => {
+      if (flat) return (r0 + r1) / 2;
       const lv = Math.log(Math.max(1, v || 1));
-      return l1 === l0 ? (r0 + r1) / 2 : r0 + ((lv - l0) / (l1 - l0)) * (r1 - r0);
+      return r0 + ((lv - l0) / (l1 - l0)) * (r1 - r0);
     };
     f.domain = [lo, hi];
     f.range = range;
-    /* Decade ticks. WITHOUT this, axisBottom's `scale.ticks ? ... : []` yields an
-       empty array and the log axis renders with no labels at all -- which is the
-       exact failure the deleted charts.test.js existed to guard, recurring in new
-       clothes. Caught in plan review, not in the browser. */
+    /* Decade ticks. WITHOUT these, a consumer that asks a scale for its ticks gets
+       an empty array and the axis renders with no labels at all. */
     f.ticks = () => {
+      if (flat) return [lo];
       const out = [];
       for (let d = Math.pow(10, Math.floor(Math.log10(lo))); d <= hi; d *= 10) {
         if (d >= lo) out.push(d);
       }
-      if (out.length < 2) return [lo, hi];
-      return out;
+      return out.length >= 2 ? out : [lo, hi];
     };
     return f;
   }
@@ -89,12 +92,22 @@
     const mag = Math.pow(10, Math.floor(Math.log10(raw)));
     const norm = raw / mag;
     const step = (norm >= 5 ? 10 : norm >= 2 ? 5 : norm >= 1 ? 2 : 1) * mag;
+    // Rounding to the step's own precision, not snapping near zero. Accumulating
+    // `v += step` yields 0.6000000000000001 and -5.55e-17 where 0 belongs, and
+    // money()/pct() render the latter as "-$0.00". One mechanism covers both, and
+    // it leaves no near-zero branch to go stale.
+    const dp = (() => {
+      const s = String(step);
+      const i = s.indexOf(".");
+      return i < 0 ? 0 : Math.min(20, s.length - i - 1);
+    })();
     const out = [];
     const eps = step * 1e-9;
-    for (let v = Math.ceil(lo / step) * step; v <= hi + eps; v += step) {
-      // Floating-point accumulation gives 5.55e-17 where 0 belongs, and money()
-      // renders that as "-$0.00".
-      out.push(Math.abs(v) < eps ? 0 : v);
+    const first = Math.ceil(lo / step) * step;
+    for (let i = 0; ; i++) {
+      const v = Number((first + i * step).toFixed(dp));
+      if (v > hi + eps) break;
+      out.push(v);
     }
     return out.length >= 2 ? out : [lo, hi];
   }

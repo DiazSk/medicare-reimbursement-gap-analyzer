@@ -19,7 +19,7 @@ test("scaleLinear maps domain ends to range ends exactly", () => {
 });
 
 test("scaleLinear on a zero-width domain returns the range midpoint, never NaN", () => {
-  // Review Focus 2. Live mode reaches this by filtering to one state, or to a
+  // Live mode reaches this by filtering to one state, or to a
   // cohort where every row carries the same value. A NaN here does not throw --
   // it produces d="MNaN,NaN" and the chart silently renders nothing at all.
   const x = S.scaleLinear([5, 5], [0, 100]);
@@ -43,14 +43,27 @@ test("scaleLinear extrapolates outside the domain predictably", () => {
   assert.equal(x(-5), -50);
 });
 
-test("scaleLog maps multiplicatively and floors a non-positive domain at 1", () => {
-  // cNonParAbs spans three orders of magnitude, and n_n can be 0.
-  const x = S.scaleLog([1, 1000], [0, 300]);
+test("scaleLog floors a non-positive domain at 1", () => {
+  // log(0) is -Infinity and a cohort with zero non-participating providers is
+  // ordinary data, so the floor is load-bearing. Asserted on .domain, because a
+  // finiteness check alone passes with the floor removed.
+  const x = S.scaleLog([0, 1000], [0, 300]);
+  assert.equal(x.domain[0], 1, "a non-positive lower bound must be floored to 1");
+  assert.equal(x(0), x(1), "0 and 1 must land on the same pixel");
+  assert.equal(x(-5), x(1), "a negative count must land there too");
   assert.equal(Math.round(x(1)), 0);
   assert.equal(Math.round(x(1000)), 300);
   assert.equal(Math.round(x(10)), 100);
-  assert.ok(Number.isFinite(x(0)), "log(0) must not become -Infinity");
-  assert.ok(Number.isFinite(x(-5)), "a negative count must not become NaN");
+});
+
+test("scaleLog on a zero-width domain returns the midpoint, like scaleLinear", () => {
+  for (const d of [[0, 0], [5, 5]]) {
+    const x = S.scaleLog(d, [0, 300]);
+    assert.equal(x(d[0]), 150, `scaleLog([${d}]) must centre, not pin to the range start`);
+    assert.equal(x(999), 150);
+  }
+  assert.deepEqual(S.scaleLog([5, 5], [0, 300]).ticks(), [5],
+    "a flat log domain has one tick, not two indistinguishable ones");
 });
 
 test("scaleBand centres each band and reports a matching step", () => {
@@ -61,7 +74,7 @@ test("scaleBand centres each band and reports a matching step", () => {
 });
 
 test("scaleBand handles a single label without dividing by zero", () => {
-  // Review Focus 1/2: a one-row cohort.
+  // A one-row cohort.
   const y = S.scaleBand(["only"], [0, 200], 0);
   assert.equal(y.step, 200);
   assert.equal(y("only"), 100);
@@ -93,16 +106,26 @@ test("niceTicks handles a degenerate and a reversed domain", () => {
   assert.deepEqual(S.niceTicks(NaN, 10, 5), []);
 });
 
-test("niceTicks snaps a near-zero tick to exact zero", () => {
-  // Floating-point accumulation yields 5.55e-17 instead of 0, which money()
-  // then renders as "$0.00" on one axis and "-$0.00" on another.
-  const t = S.niceTicks(-50, 100, 5);
-  assert.ok(t.includes(0), `expected an exact 0 among ${t}`);
-  assert.ok(!t.some(v => v !== 0 && Math.abs(v) < 1e-9), "no near-zero artefacts");
+test("niceTicks yields an exact zero rather than a float residue", () => {
+  // Verified to accumulate -5.551115123125783e-17 at the zero crossing without
+  // the precision rounding, which money() renders as "-$0.00".
+  const t = S.niceTicks(-0.7, 0.3, 10);
+  const zero = t.find((v) => v === 0);
+  assert.ok(Object.is(zero, 0), `expected an exact 0 among ${t}`);
+  assert.ok(!t.some((v) => v !== 0 && Math.abs(v) < 1e-9), "no near-zero artefacts");
+});
+
+test("niceTicks carries no float accumulation artefacts", () => {
+  for (const [lo, hi, n] of [[0, 1, 10], [2.06, 2.84, 5], [-0.7, 0.3, 10]]) {
+    for (const v of S.niceTicks(lo, hi, n)) {
+      assert.ok(!/\.\d{12,}/.test(String(v)),
+        `tick ${v} from (${lo},${hi},${n}) carries accumulated error`);
+    }
+  }
 });
 
 test("esc neutralises the SVG-breaking characters in CMS free text", () => {
-  // Review Focus 5. `desc` and `specialty` are free-text CMS fields and land in
+  // `desc` and `specialty` are free-text CMS fields and land in
   // <text> and <title>. One ampersand corrupts the whole document.
   assert.equal(S.esc("Obstetrics & Gynecology"), "Obstetrics &amp; Gynecology");
   assert.equal(S.esc('a<b>"c"'), "a&lt;b&gt;&quot;c&quot;");

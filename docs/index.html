@@ -20,21 +20,22 @@
 <link rel="stylesheet" href="css/dash.css">
 </head>
 <body>
-<div class="wrap">
+<header class="bar"><div class="wrap">
+  <span class="brand">CMS Medicare &middot; CY2023</span>
+  <nav class="nav" aria-label="Sections">
+    <a href="#pl1" aria-current="true">Geography</a>
+    <a href="#pl2">Participation</a>
+    <a href="#pl3">Concentration</a>
+    <a href="#pl4">Credentials</a>
+    <a href="#pl5">Site of service</a>
+    <a href="#notes">Notes</a>
+  </nav>
+  <a class="btn" href="https://github.com/DiazSk/healthcare-lakehouse-azure"
+     rel="noopener">Repository</a>
+</div></header>
 
-<header class="page">
-  <div>
-    <h1>The Medicare Reimbursement Gap</h1>
-    <p class="sub">Five billing anomalies hiding in Medicare's own published claims data —
-      where the same procedure, billed by a different provider, in a different place, or
-      under different letters after a name, costs a measurably different amount.</p>
-    <p class="prov" id="prov"></p>
-    <p class="prov"><a href="explore.html">Explore the data yourself →</a></p>
-  </div>
-</header>
-
-<section class="kpis" id="kpis"></section>
-
+<div class="band"><div class="wrap">
+<span class="blabel">Filter</span>
 <div class="filters">
   <div class="f">
     <label for="fState">State</label>
@@ -60,9 +61,36 @@
      level, which carries no state or specialty column — so they cannot be filtered
      rather than silently showing stale numbers.</p>
 </div>
+</div></div>
+
+<div class="wrap">
+
+<header class="page">
+  <div>
+    <h1>The Medicare Reimbursement Gap</h1>
+    <p class="sub">Five billing anomalies hiding in Medicare's own published claims data —
+      where the same procedure, billed by a different provider, in a different place, or
+      under different letters after a name, costs a measurably different amount.</p>
+    <p class="prov" id="prov"></p>
+    <p class="prov"><a href="explore.html">Explore the data yourself →</a></p>
+  </div>
+  <div class="seal" aria-hidden="true">
+    <svg viewBox="0 0 120 120">
+      <defs><path id="sealring" d="M60,60 m-45,0 a45,45 0 1,1 90,0 a45,45 0 1,1 -90,0"/></defs>
+      <circle cx="60" cy="60" r="58" class="sealbg"/>
+      <circle cx="60" cy="60" r="49" class="sealline"/>
+      <text class="sealtext"><textPath href="#sealring" startOffset="0"
+        >Every billing provider &middot; Complete enumeration &middot; CMS CY2023 &middot; </textPath></text>
+    </svg>
+    <span class="sealctr"><b>Census</b><span>not a sample</span></span>
+  </div>
+</header>
+
+<section class="kpis" id="kpis"></section>
+
 
 <!-- HERO 1 -->
-<section class="card">
+<section class="card" id="pl1">
   <div class="eyebrow"><span class="n">Hero 01</span> Geographic arbitrage
     <span class="chip">Responds to: State · RUCA</span></div>
   <h2 id="h1title">The same procedure costs more depending on the ZIP code it is billed from</h2>
@@ -85,7 +113,7 @@
 </section>
 
 <!-- HERO 2 -->
-<section class="card">
+<section class="card" id="pl2">
   <div class="eyebrow"><span class="n">Hero 02</span> The participation loophole
     <span class="chip">Responds to: Specialty</span>
     <span class="badge-reliability" id="badgeH2" hidden></span></div>
@@ -105,7 +133,7 @@
 </section>
 
 <!-- HERO 3 -->
-<section class="card">
+<section class="card" id="pl3">
   <div class="eyebrow"><span class="n">Hero 03</span> Drug-spend concentration
     <span class="chip" id="chipH3">National</span></div>
   <h2>Medicare's drug spending is concentrated in a very small number of prescribers</h2>
@@ -120,7 +148,7 @@
 </section>
 
 <!-- HERO 4 -->
-<section class="card">
+<section class="card" id="pl4">
   <div class="eyebrow"><span class="n">Hero 04</span> The credentials markup cliff
     <span class="chip">National</span></div>
   <h2>On identical office-visit codes, nurse practitioners and PAs submit <em>higher</em>
@@ -136,7 +164,7 @@
 </section>
 
 <!-- HERO 5 -->
-<section class="card">
+<section class="card" id="pl5">
   <div class="eyebrow"><span class="n">Hero 05</span> Site-of-service differential
     <span class="chip">National</span></div>
   <h2>The same procedure pays the physician <em>less</em> in a facility — because half the fee
@@ -155,7 +183,7 @@
 </section>
 
 <!-- DETAIL -->
-<section class="card">
+<section class="card" id="plD">
   <div class="eyebrow"><span class="n">Detail</span> Provider outlier explorer
     <span class="chip">Responds to: State · Specialty</span></div>
   <h2>Providers whose Medicare revenue is mostly drug reimbursement</h2>
@@ -167,7 +195,7 @@
   <div class="pager" id="provPager"></div>
 </section>
 
-<footer class="page">
+<footer class="page" id="notes">
   <h3>Method &amp; provenance</h3>
   <ul>
     <li><strong>Source.</strong> CMS <em>Medicare Physician &amp; Other Practitioners — by
@@ -245,6 +273,20 @@ function viewFromPayload() {
 }
 
 /* ── boot ───────────────────────────────────────────────────────────────── */
+
+/* The bar and the band are both sticky, so every in-page anchor has to clear their
+   combined height. That height is content-dependent -- the band wraps at narrow
+   widths -- so a hardcoded scroll-padding-top drifts the moment a label changes.
+   Measure it instead, and re-measure on resize. dash.css carries a fallback for the
+   no-JS case. */
+(function stickyOffset() {
+  const stack = [".bar", ".band"].map(sel => document.querySelector(sel));
+  const set = () => document.documentElement.style.setProperty("--stick",
+    stack.reduce((h, el) => h + (el ? el.offsetHeight : 0), 0) + "px");
+  set();
+  addEventListener("resize", set, { passive: true });
+})();
+
 const liveStatus = document.getElementById("liveStatus");
 E.onProgress(({ phase, loaded, total }) => {
   liveStatus.textContent = `loading ${phase} (${loaded}/${total})…`;

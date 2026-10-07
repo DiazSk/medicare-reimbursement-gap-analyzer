@@ -571,10 +571,14 @@
     });
 
     const j = view.jcodeTop.slice(0, 15);
-    document.getElementById("cJcode").innerHTML =
+    const jcodeHost = document.getElementById("cJcode");
+    jcodeHost.innerHTML =
       `<h3 class="figtitle">Largest drug codes by Medicare payment</h3>`
       + V().dotPlot({
           t: T(),
+          // The viewBox must match the rendered width or the whole SVG scales and the
+          // labels shrink with it -- 760 into a 526px box rendered them at 7.3px.
+          width: jcodeHost.clientWidth || 760,
           rows: j,
           label: (d) => d.hcpcs,
           value: (d) => d.pymt,

@@ -414,3 +414,19 @@ test("dotPlot draws rows top-to-bottom in the order given", () => {
   assert.ok(ys[0] < ys[1] && ys[1] < ys[2],
     `rows must descend the page in array order, got y=${ys.join(", ")}`);
 });
+
+test("dotPlot clamps a zero or absurd width instead of collapsing", () => {
+  // A host that is detached or display:none reports clientWidth 0. The frame must
+  // still be drawable rather than collapsing to a zero-width viewBox.
+  for (const width of [0, undefined, -50, 10]) {
+    const out = S.dotPlot({
+      t: TK, width, rows: [{ k: "a", v: 1 }],
+      label: (r) => r.k, value: (r) => r.v,
+      fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+    });
+    const vb = out.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+    assert.ok(vb, `no frame drawn for width=${width}`);
+    assert.ok(Number(vb[1]) >= 320, `width=${width} gave viewBox width ${vb && vb[1]}`);
+    assert.ok(!out.includes("NaN"), `width=${width} leaked NaN`);
+  }
+});

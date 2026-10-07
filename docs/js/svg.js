@@ -248,7 +248,8 @@
     }
 
     const rowH = spec.rowH == null ? 26 : spec.rowH;
-    const W = spec.width == null ? 760 : spec.width;
+    // A detached or display:none host reports 0, which would collapse the drawing.
+    const W = Math.max(320, spec.width == null ? 760 : spec.width);
     const labels = rows.map(spec.label);
     const gutter = Math.min(220, labelWidth(labels, 10.5) + 14);
     const valW = 86;

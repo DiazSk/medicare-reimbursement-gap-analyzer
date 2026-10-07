@@ -147,9 +147,8 @@
       const fade = dim ? ' opacity=".35"' : "";
 
       if (v === null) {
-        const t = V().tipParts({ label: st, value: "No data for this filter" });
-        shapes.push(`<path d="${d}" fill="url(#h1nodata)" ${edge}${fade}${t.attr}>`
-          + `${t.child}</path>`);
+        const tip = V().tipParts({ label: st, value: "No data for this filter" });
+        shapes.push(`<path d="${d}" fill="url(#h1nodata)" ${edge}${fade}${tip}/>`);
         continue;
       }
       const b = binOf(v, bound), up = v >= 0;
@@ -160,7 +159,7 @@
         note: `${up ? "Above" : "Below"} the standardized amount`,
       });
       shapes.push(`<path d="${d}" fill="${up ? ramp[b] : `url(#h1rule${b})`}" ${edge}${fade}`
-        + `${t.attr}>${t.child}</path>`);
+        + `${t}/>`);
 
       if (!labelled.has(st) || !box || dim) continue;
       if (box.w > 24 && box.h > 14) {
@@ -496,7 +495,7 @@
           value: `${pct(p.y, 0)} of drug spend`,
         });
         hits += `<circle cx="${x(p.x).toFixed(2)}" cy="${y(p.y).toFixed(2)}" r="11" `
-          + `fill="none" pointer-events="all"${tp.attr}>${tp.child}</circle>`;
+          + `fill="none" pointer-events="all"${tp}/>`;
       }
       body += S.axisBottom(x, H - padB, (v) => pct(v, 0),
         { axis: t.axis, muted: t.muted });

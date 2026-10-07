@@ -146,26 +146,27 @@ test("dot(filled:false) is a sheet interior inside a series stroke", () => {
   assert.match(solid, /fill="#2a78d6"/);
 });
 
-test("dot carries its tip as structured parts plus a composed <title>", () => {
+test("dot carries its tip as structured parts and NO <title>", () => {
   /* The hover layer reads the parts separately so it can set the label in grey mono
-     above a bold value. <title> stays as ONE composed string: a screen reader
-     announces an element's title as a single utterance, and three sibling attributes
-     would announce as nothing at all. */
+     above a bold value. There is deliberately no <title>: that element renders the
+     browser's OWN grey tooltip, so one here would draw the native box underneath the
+     styled one. It bought no accessibility either -- frame() marks every chart
+     role="img", which keeps the marks out of the accessibility tree entirely. */
   const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff",
     tip: { label: "Obstetrics & Gynecology", value: "+124.0% premium",
            note: "11 providers" } });
   assert.match(d, /data-tip-label="Obstetrics &amp; Gynecology"/);
   assert.match(d, /data-tip-value="\+124.0% premium"/);
   assert.match(d, /data-tip-note="11 providers"/);
-  assert.match(d, /<title>Obstetrics &amp; Gynecology \u00b7 \+124.0% premium \u00b7 11 providers<\/title>/);
+  assert.ok(!d.includes("<title>"), "a <title> would draw a second, native tooltip");
 });
 
-test("a tip may omit note, and <title> then composes only what exists", () => {
-  // Joining blindly would leave a dangling separator -- "NY \u00b7 $1 \u00b7 " reads as a
-  // truncated sentence, which is worse than the shorter true one.
+test("a tip may omit note, and then emits no note attribute at all", () => {
+  // tip.js renders only the parts present; an empty attribute would add a blank line.
   const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff",
     tip: { label: "NY", value: "$205.9M" } });
-  assert.match(d, /<title>NY \u00b7 \$205.9M<\/title>/);
+  assert.match(d, /data-tip-label="NY"/);
+  assert.match(d, /data-tip-value="\$205.9M"/);
   assert.ok(!d.includes("data-tip-note"), "an absent note must emit no attribute");
 });
 
@@ -175,12 +176,11 @@ test("a bare string tip degrades to a value rather than rendering [object Object
      console.warn, so a loud failure would not be loud. */
   const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff", tip: "plain" });
   assert.match(d, /data-tip-value="plain"/);
-  assert.match(d, /<title>plain<\/title>/);
   assert.ok(!d.includes("object Object"));
 });
 
 test("an absent, null or empty tip emits no attributes at all", () => {
-  // An empty <title> is an empty announcement, which is worse than none.
+  // No attributes at all, so tip.js's closest() never matches and nothing opens.
   for (const tip of [undefined, null, ""]) {
     const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff", tip });
     assert.ok(!d.includes("data-tip"), `tip=${JSON.stringify(tip)} produced a data-tip attr`);
@@ -241,11 +241,11 @@ test("bubble and dumbbell carry their tip the same way dot does", () => {
   const b = S.bubble(1, 2, 3, { fill: "#000", stroke: "#000",
     tip: { label: "B & C", value: "$1" } });
   assert.match(b, /data-tip-label="B &amp; C"/);
-  assert.match(b, /<title>B &amp; C \u00b7 \$1<\/title>/);
+  assert.ok(!b.includes("<title>"), "bubble must not draw a native tooltip");
   const d = S.dumbbell(1, 9, 5, { series: "#000", sheet: "#fff", whisker: "#888",
     tip: { label: "D & E", value: "2 vs 3" } });
   assert.match(d, /data-tip-label="D &amp; E"/);
-  assert.match(d, /<title>D &amp; E \u00b7 2 vs 3<\/title>/);
+  assert.ok(!d.includes("<title>"), "dumbbell must not draw a native tooltip");
 });
 
 test("every mark rounds its coordinates and honours its size options", () => {
@@ -722,7 +722,11 @@ test("the plot keeps at least 160px at phone width, and labels yield with an ell
     const { x0, x1 } = hair(out);
     assert.ok(x1 - x0 >= 160, `plot is ${x1 - x0}px at ${width}`);
     assert.match(out, /\u2026/, "a squeezed label ends in an ellipsis");
-    assert.ok(out.includes(`<title>${long}</title>`), "the full label stays as a hover title");
+    /* A cut label carries the full text as a styled tip, not a <title>: the native
+       tooltip is what this whole layer exists to replace. */
+    assert.ok(out.includes(`data-tip-value="${long}"`),
+      "the full label must survive truncation as a tip");
+    assert.ok(!out.includes("<title>"), "a truncated label must not draw a native tooltip");
   }
 });
 

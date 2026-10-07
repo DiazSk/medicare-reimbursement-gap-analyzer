@@ -123,10 +123,17 @@
 
   /* A tip is { label, value, note } -- the entity, the number, and the cohort it
      rests on. tip.js reads the three attributes separately so it can set the label
-     in grey mono above a bold value; <title> gets them joined, because a screen
-     reader announces an element's title as one utterance and three sibling
-     attributes would announce as nothing. Both or neither: an empty <title> is an
-     empty announcement.
+     in grey mono above a bold value.
+
+     No <title> child, deliberately. A <title> renders the browser's OWN tooltip --
+     grey, delayed, OS-styled -- so one beside data-tip draws the native box
+     underneath the designed one. It was kept here at first as a screen-reader
+     fallback, but frame() wraps every chart in role="img" with its own aria-label,
+     which makes descendants presentational: the marks never reached the
+     accessibility tree at all. Verified against Chrome's tree -- a chart's <circle>
+     elements and their titles are absent from it. So the titles cost a duplicate
+     tooltip and bought nothing. The svg-level aria-label is the accessible name, and
+     the SHOW TABLE toggles are where per-datum figures are readable as text.
 
      A bare string is accepted as a value-only tip. Every call site passes parts, but
      a missed one should render its text rather than "[object Object]" -- index.html
@@ -134,16 +141,14 @@
      actually be loud. */
   const TIP_KEYS = ["label", "value", "note"];
 
+  /* Returns the attribute string, to interpolate inside a tag. */
   function tipParts(tip) {
-    if (tip === null || tip === undefined || tip === "") return { attr: "", child: "" };
+    if (tip === null || tip === undefined || tip === "") return "";
     const p = typeof tip === "string" ? { value: tip } : tip;
-    const present = TIP_KEYS.filter((k) => p[k] !== null && p[k] !== undefined && p[k] !== "");
-    if (!present.length) return { attr: "", child: "" };
-    return {
-      attr: present.map((k) => ` data-tip-${k}="${esc(p[k])}"`).join(""),
-      // Only the parts that exist, so there is never a dangling separator.
-      child: `<title>${present.map((k) => esc(p[k])).join(" · ")}</title>`,
-    };
+    return TIP_KEYS
+      .filter((k) => p[k] !== null && p[k] !== undefined && p[k] !== "")
+      .map((k) => ` data-tip-${k}="${esc(p[k])}"`)
+      .join("");
   }
 
   function rule(x1, x2, y, o) {
@@ -155,16 +160,14 @@
      the contrast -- 4.03:1 regardless of what sits behind the interior. That is
      what makes filled/hollow a legal encoding channel. */
   function dot(x, y, r, o) {
-    const t = tipParts(o.tip);
     return `<circle cx="${n2(x)}" cy="${n2(y)}" r="${n2(r)}" `
       + `fill="${o.filled ? o.series : o.sheet}" stroke="${o.series}" `
-      + `stroke-width="1"${t.attr}>${t.child}</circle>`;
+      + `stroke-width="1"${tipParts(o.tip)}/>`;
   }
 
   function dumbbell(xA, xB, y, o) {
     const r = o.r == null ? 4 : o.r;
-    const t = tipParts(o.tip);
-    return `<g${t.attr}>${t.child}`
+    return `<g${tipParts(o.tip)}>`
       + rule(xA, xB, y, { stroke: o.series, width: 1 })
       // B is the smaller cohort by convention, drawn in --whisker inside the same
       // --series stroke so it reads lighter without spending a second hue.
@@ -188,9 +191,8 @@
   /* The explicit 1px stroke is the compliance mechanism, not decoration: hero 5's
      fill is --series at 69% alpha, which is 2.53:1 on its own. */
   function bubble(x, y, r, o) {
-    const t = tipParts(o.tip);
     return `<circle cx="${n2(x)}" cy="${n2(y)}" r="${n2(r)}" fill="${o.fill}" `
-      + `stroke="${o.stroke}" stroke-width="1"${t.attr}>${t.child}</circle>`;
+      + `stroke="${o.stroke}" stroke-width="1"${tipParts(o.tip)}/>`;
   }
 
   /* ── chrome ─────────────────────────────────────────────────────────────── */
@@ -267,15 +269,18 @@
     let out = "";
     for (const [i, l] of labels.entries()) {
       const emph = o.emphasis ? !!o.emphasis(l) : false;
-      // Truncation is for the DRAWN text only; `l` stays the band key, so two labels
-      // that truncate alike still get their own rows. The full text is the hover title.
+      /* Truncation is for the DRAWN text only; `l` stays the band key, so two labels
+         that truncate alike still get their own rows. A cut label carries the full
+         text as a tip -- the same styled box as every mark, not the native tooltip a
+         <title> would draw. pointer-events is left alone: a <text> is hit-testable
+         where its glyphs are painted, which is exactly the ellipsised word. */
       const full = String(l == null ? "" : l);
       const cut = o.maxChars != null && full.length > o.maxChars;
       const shown = cut ? full.slice(0, Math.max(1, o.maxChars - 1)) + "\u2026" : full;
       out += `<text x="${n2(x)}" y="${n2(band(l, i) + size / 3)}" text-anchor="end" `
         + `font-size="${size}"${fam}`
-        + ` fill="${emph && o.ink ? o.ink : o.muted}">${esc(shown)}`
-        + (cut ? `<title>${esc(full)}</title>` : "") + `</text>`;
+        + ` fill="${emph && o.ink ? o.ink : o.muted}"`
+        + (cut ? tipParts({ value: full }) : "") + `>${esc(shown)}</text>`;
     }
     return out;
   }

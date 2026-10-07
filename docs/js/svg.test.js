@@ -440,7 +440,8 @@ test("dotPlot clamps a zero or absurd width instead of collapsing", () => {
 
 test("dotPlot's value column can be more precise than its axis ticks", () => {
   // A one-decimal axis format renders 2.35e9 and 1.86e9 as "$2.4B" and "$1.9B". The
-  // dot's position carries magnitude; this column is the only place the exact figure appears, so it must be
+  // dot's position carries magnitude; this column is the only place the exact
+  // figure appears, so it must be
   // able to disagree with the tick format.
   const rows = [{ k: "a", v: 2354722302.4 }, { k: "b", v: 1860000000 }];
   const out = S.dotPlot({
@@ -652,11 +653,4 @@ test("a money(v, 1) axis labels 1.5e9 as $1.5B, never rounds it to $2B", () => {
   const ticks = [...out.matchAll(/text-anchor="middle"[^>]*>([^<]*)</g)].map((m) => m[1]);
   assert.ok(ticks.includes("$1.5B"), `ticks were ${ticks}`);
   assert.ok(!ticks.includes("$2B"), `ticks were ${ticks}`);
-});
-
-test("no panels.js axis formats money with zero digits", () => {
-  // The SVG test above exercises svg.js; this is what notices a call site in panels.js
-  // that was missed, or reverted. money(x, 0) rounds 1.5e9 to "$2B".
-  const src = fs.readFileSync(path.join(__dirname, "panels.js"), "utf8");
-  assert.deepEqual(src.match(/money\(\w+, *0\)/g), null);
 });

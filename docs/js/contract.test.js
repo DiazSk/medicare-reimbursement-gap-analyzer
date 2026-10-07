@@ -214,3 +214,13 @@ test("every name a module destructures from window.MD is actually exported", () 
   }
   assert.ok(checked > 5, `expected to check several imports, checked ${checked}`);
 });
+
+test("no panels.js axis formats money with zero digits", () => {
+  /* money(1.5e9, 0) renders "$2B" -- wrong by half a billion, and distinct from
+     "$1B", so axisBottom's duplicate-label fallback never fires on it. svg.test.js
+     pins the renderer's behaviour; only a source check notices a panels.js call site
+     that was missed or reverted, which is the same reason the token and sentinel
+     guards above read the source rather than the output. */
+  const src = read("js/panels.js");
+  assert.deepEqual(src.match(/money\(\w+, *0\)/g), null);
+});

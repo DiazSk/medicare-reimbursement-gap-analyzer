@@ -75,8 +75,10 @@ test("every class name JS writes has a rule in the stylesheet", () => {
   // panels.js emits kpi/label/value/note/l/empty/tile/sel/dim; explore.js emits toggle
   // and l. badge-reliability is static markup -- guardrails.js only toggles an attribute,
   // so a rename breaks it with no JS error whatsoever.
+  // tile/sel/dim went with the tile grid: the choropleth encodes selection on the SVG
+  // path's own stroke, so no class is written for it. lk/lgroup are the legend keys.
   for (const cls of ["toggle", "l", "empty", "kpi", "label", "value", "note",
-                     "tile", "sel", "dim", "badge-reliability"]) {
+                     "lk", "lgroup", "badge-reliability"]) {
     // Boundary-aware: a bare substring check passes for `.emptyX`, so renaming the rule
     // would slip through. (Found by mutation-testing this very assertion.)
     const rule = new RegExp("\\." + cls + "(?![\\w-])");

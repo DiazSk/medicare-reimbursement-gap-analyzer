@@ -246,22 +246,29 @@
     font-size: 10.5px; letter-spacing: 0.04em; color: var(--ink-2);
     text-transform: uppercase; background: var(--sheet); }
   .split { display: grid; gap: 22px; grid-template-columns: 1.15fr 1fr; align-items: start; }
+  /* Hero 1 only. The choropleth is drawn from real geometry, so its labels scale with
+     the element: at 1.15fr of a two-column split it rendered at 0.56 and put the state
+     codes at 5.3px. Full measure puts them back over 10px. */
+  .split.stacked { grid-template-columns: 1fr; }
   .chartbox { position: relative; height: 330px; }
   .chartbox.tall { height: 430px; }
 
-  /* tile-grid US map: no geo library, stays crisp at any size */
-  .tilemap { display: grid; grid-template-columns: repeat(11, 1fr);
-    grid-auto-rows: 1fr; gap: 3px; }
-  .tilemap::before { content: ""; grid-area: 1 / 1; aspect-ratio: 1; }
-  .tile { display: flex; align-items: center; justify-content: center;
-    aspect-ratio: 1; border-radius: var(--radius); font-size: 10.5px; font-weight: 650;
-    color: #0b0b0b; cursor: default; border: 1px solid transparent; }
-  .tile.sel { outline: 2px solid var(--ink); outline-offset: 1px; }
-  .tile.dim { opacity: 0.32; }
-  .legend { display: flex; align-items: center; gap: 10px; margin-top: 14px;
-    font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
-  .ramp { display: flex; height: 11px; width: 190px; border-radius: var(--radius); overflow: hidden; }
-  .ramp span { flex: 1; }
+  /* Choropleth over real geometry (us-atlas albers variant, inlined by
+     js/us-states.js). No geo library and no projection code: the source is already
+     projected to screen space with AK and HI inset. */
+  .tilemap svg { width: 100%; height: auto; max-height: 620px; display: block; }
+  .tilemap svg text { font-family: var(--font-mono); }
+
+  .legend { display: flex; align-items: center; gap: 8px 12px; margin-top: 12px;
+    font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-2); flex-wrap: wrap; }
+  .ramp { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .lgroup { letter-spacing: 0.14em; color: var(--ink-3); }
+  .lk { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  /* 16px, not a few px: a hatch pitch and a ramp step are both unresolvable in a
+     smaller swatch, which is the whole reason the legend exists. */
+  .lk i { width: 16px; height: 11px; border: 1px solid var(--ink-3);
+    display: inline-block; flex: 0 0 auto; }
 
   /* tables */
   table { width: 100%; border-collapse: collapse; font-size: 13px;

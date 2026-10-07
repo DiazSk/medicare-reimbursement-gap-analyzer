@@ -14,17 +14,60 @@
   const withAlpha = (c, a) =>
     a >= 1 ? c : c.replace("rgb(", "rgba(").replace(")", `, ${a})`);
 
-  /* ── tile-grid US map layout (row, col) — 50 states + DC ─────────────────── */
-  const TILES = {
-    AK:[1,1], ME:[1,11],
-    VT:[2,10], NH:[2,11],
-    WA:[3,1], ID:[3,2], MT:[3,3], ND:[3,4], MN:[3,5], WI:[3,6], MI:[3,7], NY:[3,9], MA:[3,10], RI:[3,11],
-    OR:[4,1], NV:[4,2], WY:[4,3], SD:[4,4], IA:[4,5], IL:[4,6], IN:[4,7], OH:[4,8], PA:[4,9], NJ:[4,10], CT:[4,11],
-    CA:[5,1], UT:[5,2], CO:[5,3], NE:[5,4], MO:[5,5], KY:[5,6], WV:[5,7], VA:[5,8], MD:[5,9], DE:[5,10],
-    AZ:[6,2], NM:[6,3], KS:[6,4], AR:[6,5], TN:[6,6], NC:[6,7], SC:[6,8], DC:[6,9],
-    OK:[7,4], LA:[7,5], MS:[7,6], AL:[7,7], GA:[7,8],
-    HI:[8,1], TX:[8,4], FL:[8,9],
+  /* A 1px --ink rule at x = 0 on the diverging bar charts. Sign is already carried by
+     which side of zero a bar sits on; this just makes the datum visible, so the
+     filled/hollow channel is confirmation rather than the only cue.
+     Registered per-chart via `plugins: [ZERO_RULE]`, not globally: cLorenz and cSite
+     have a meaningful x = 0 that is an axis end, not a midpoint. */
+  const ZERO_RULE = {
+    id: "zeroRule",
+    afterDatasetsDraw(chart) {
+      const x = chart.scales.x, y = chart.scales.y;
+      if (!x || !y || x.min > 0 || x.max < 0) return;
+      const px = x.getPixelForValue(0);
+      const g = chart.ctx;
+      g.save();
+      g.beginPath();
+      g.moveTo(px, y.top);
+      g.lineTo(px, y.bottom);
+      g.lineWidth = 1;
+      g.strokeStyle = T().ink1;
+      g.stroke();
+      g.restore();
+    },
   };
+
+  /* ── choropleth support ─────────────────────────────────────────────────
+     Geometry lives in us-states.js (us-atlas albers variant, pre-projected and
+     pre-inset). Read it lazily, not at load time: panels.test.js loads this module
+     with no window.US_STATES at all. */
+  const GEOM = () => root.US_STATES || {};
+
+  // The viewBox origin is NEGATIVE because the albers geometry starts at x = -58
+  // (Alaska). A "0 0 975 610" box clips it; this cost a rebuild to find.
+  const VIEWBOX = "-60 12 1085 595";
+  // Callout labels for areas too small to hold one sit in a right margin at this x.
+  const GUTTER_X = 952;
+
+  /* Bounding box and centre straight off the path's own numbers. Every command in
+     this data is M or L with absolute x,y pairs, so the coordinate stream is simply
+     every other number -- no path parser needed. */
+  function pathBox(d) {
+    const n = d.match(/-?\d+(?:\.\d+)?/g);
+    if (!n) return null;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let k = 0; k < n.length - 1; k += 2) {
+      const x = +n[k], y = +n[k + 1];
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
+  }
+
+  const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
   /* ── HERO 1 ─────────────────────────────────────────────────────────────── */
   function geoByState(geoRows, filters) {
@@ -42,47 +85,144 @@
   }
 
 
+  /* Four magnitude bins, and SIGN CARRIED BY FILL TEXTURE rather than by hue: solid is
+     above the geographically standardized amount, a 45-degree rule-hatch is below. The
+     ramp step then means magnitude on BOTH sides of zero -- eight distinguishable
+     states instead of four, which is the resolution the tile map had to spend on sign.
+
+     Quantising is also a contrast fix. The old continuous ramp had a dead band where a
+     fill fails 4.5:1 against either ink, and inkOn()'s 0.4 threshold flips inside it.
+     None of the four bins lands there. */
+  const binOf = (v, bound) => Math.min(3, Math.floor(Math.abs(v) / bound * 4));
+
+  function renderChoropleth(rows, filters, bound) {
+    const host = document.getElementById("tilemap");
+    const G = GEOM();
+    if (!Object.keys(G).length) {
+      // Loud, not silent: a blank panel would look like a filter with no matches.
+      host.innerHTML = '<p class="empty">State geometry (js/us-states.js) did not load, '
+        + 'so the map cannot be drawn. The ranking beside it is unaffected.</p>';
+      return;
+    }
+    const ramp = T().ramp;
+    const by = Object.fromEntries(rows.map(r => [r.state, r]));
+    const per = (st) => (by[st] && by[st].perBene !== null ? by[st].perBene : null);
+
+    // One pattern per bin. Pitch tightens as magnitude rises so the hatch reads as
+    // ordered even in monochrome or in print.
+    const defs = ramp.map((hex, i) => `<pattern id="h1rule${i}" width="${7 - i}" `
+      + `height="${7 - i}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">`
+      + `<rect width="${7 - i}" height="${7 - i}" fill="${T().sheet}"/>`
+      + `<line x1="0" y1="0" x2="0" y2="${7 - i}" stroke="${hex}" `
+      + `stroke-width="${(1.4 + i * 0.5).toFixed(1)}"/></pattern>`).join("")
+      + `<pattern id="h1nodata" width="5" height="5" patternUnits="userSpaceOnUse" `
+      + `patternTransform="rotate(45)"><rect width="5" height="5" fill="${T().sheet}"/>`
+      + `<line x1="0" y1="0" x2="0" y2="5" stroke="${T().hair}" stroke-width="1"/></pattern>`;
+
+    // Label the eight largest by magnitude; the rest would collide.
+    const ranked = Object.keys(G).filter(s => per(s) !== null)
+      .sort((a, b) => Math.abs(per(b)) - Math.abs(per(a)));
+    const labelled = new Set(ranked.slice(0, 8));
+
+    const shapes = [], labels = [], callouts = [];
+    for (const [st, d] of Object.entries(G)) {
+      const v = per(st), box = pathBox(d);
+      const sel = filters.state !== "all" && st === filters.state;
+      const dim = filters.state !== "all" && !sel;
+      // Selection rides on the OUTLINE, never on the fill: the fill is already
+      // carrying both sign and magnitude.
+      const edge = sel ? `stroke="${T().ink1}" stroke-width="2"`
+        : `stroke="${T().muted}" stroke-width=".8"`;
+      const fade = dim ? ' opacity=".35"' : "";
+
+      if (v === null) {
+        shapes.push(`<path d="${d}" fill="url(#h1nodata)" ${edge}${fade}>`
+          + `<title>${esc(st)} · no data for this filter</title></path>`);
+        continue;
+      }
+      const b = binOf(v, bound), up = v >= 0;
+      shapes.push(`<path d="${d}" fill="${up ? ramp[b] : `url(#h1rule${b})`}" ${edge}${fade}>`
+        + `<title>${esc(st)} · ${esc(money(v, 2))} per beneficiary-proxy · `
+        + `${up ? "above" : "below"} standard</title></path>`);
+
+      if (!labelled.has(st) || !box || dim) continue;
+      if (box.w > 24 && box.h > 14) {
+        // inkOn() decides the ink from the fill's own luminance. A hatched fill is
+        // mostly sheet, so it always takes the dark ink.
+        const ink = up ? inkOn(ramp[b], T().ink1, "#ffffff") : T().ink1;
+        labels.push(`<text x="${box.cx.toFixed(0)}" y="${(box.cy + 3).toFixed(0)}" `
+          + `text-anchor="middle" font-size="9.5" letter-spacing=".06em" `
+          + `fill="${ink}">${esc(st)}</text>`);
+      } else {
+        callouts.push({ st, v, cx: box.cx, cy: box.cy });
+      }
+    }
+
+    /* Too small to hold a label, so it goes in the right margin with a leader -- the
+       atlas convention, and the only way DC/RI/DE/CT read at all. Stacked top-down and
+       pushed apart so two leaders never land on the same line.
+       ponytail: right gutter only. Every area small enough to need one is in the
+       northeast; a western one would need a left gutter too. */
+    callouts.sort((a, b) => a.cy - b.cy);
+    let lastY = -Infinity;
+    for (const c of callouts) {
+      const ty = Math.max(c.cy, lastY + 14);
+      lastY = ty;
+      labels.push(`<polyline points="${(c.cx + 2).toFixed(0)},${c.cy.toFixed(0)} `
+        + `${(GUTTER_X - 16)},${ty.toFixed(0)} ${(GUTTER_X - 4)},${ty.toFixed(0)}" `
+        + `fill="none" stroke="${T().ink1}" stroke-width=".8"/>`
+        + `<circle cx="${c.cx.toFixed(0)}" cy="${c.cy.toFixed(0)}" r="1.8" fill="${T().ink1}"/>`
+        + `<text x="${GUTTER_X}" y="${(ty + 3).toFixed(0)}" font-size="9.5" `
+        + `letter-spacing=".06em" fill="${T().ink1}">${esc(c.st)} ${esc(money(c.v, 2))}</text>`);
+    }
+
+    host.innerHTML = `<svg viewBox="${VIEWBOX}" role="img" aria-label="Geographic premium `
+      + `per beneficiary-proxy by state. Solid fill is above the standardized amount, `
+      + `ruled fill is below.">`
+      + `<defs>${defs}</defs>${shapes.join("")}${labels.join("")}</svg>`;
+  }
+
+  /* Eight keys plus a conditional ninth. The no-data key appears ONLY when a no-data
+     area was actually drawn -- a legend key for a state the map does not contain is a
+     claim about nothing, and this mockup grew phantom keys twice before this rule. */
+  function hero1Legend(rows, bound) {
+    const ramp = T().ramp;
+    const G = GEOM();
+    const drawnStates = rows.filter(r => G[r.state] && r.perBene !== null).length;
+    const missing = Object.keys(G).length - drawnStates;
+    const step = (i) => money(bound * (i + 1) / 4, 2);
+    const solid = ramp.map((c, i) =>
+      `<span class="lk"><i style="background:${c}"></i>${step(i)}</span>`).join("");
+    const ruled = ramp.map((c, i) =>
+      `<span class="lk"><i style="background:${T().sheet};background-image:`
+      + `repeating-linear-gradient(45deg,transparent 0 ${6 - i}px,${c} ${6 - i}px `
+      + `${(7.4 - i + i * 0.5).toFixed(1)}px)"></i>${step(i)}</span>`).join("");
+    const nodata = missing > 0
+      ? `<span class="lk"><i style="background:${T().sheet};background-image:`
+        + `repeating-linear-gradient(45deg,transparent 0 3px,${T().hair} 3px 4px)"></i>`
+        + `No data</span>`
+      : "";
+    return `<span class="lgroup">Solid · above standard</span>${solid}`
+      + `<span class="lgroup">Ruled · below</span>${ruled}${nodata}`;
+  }
+
   function renderHero1(view, filters) {
     const rows = geoByState(view.geo, filters);
-    // Scale only over states the map actually DRAWS. Territories like MP and FM are
-    // in the data but not on the tile grid, and letting them set the bound
-    // compressed every drawn state toward the neutral midpoint.
-    const drawn = rows.filter(r => TILES[r.state] && r.perBene !== null);
+    const G = GEOM();
+    // Scale only over areas the map actually DRAWS. Territories like MP and FM are in
+    // the data but have no geometry, and letting them set the bound compressed every
+    // drawn state toward the midpoint.
+    const drawn = rows.filter(r => G[r.state] && r.perBene !== null);
     const absSorted = drawn.map(r => Math.abs(r.perBene)).sort((a, b) => a - b);
     // p95 rather than max: Alaska's geographic adjustment is a genuine outlier at
-    // roughly twice the next state, so anchoring on it flattens the other fifty.
-    // diverging() clamps, and the legend states the true range, so nothing is hidden.
+    // roughly twice the next state, so anchoring on it flattens the other fifty. The
+    // bin function clamps and the legend states the true range, so nothing is hidden.
     const bound = quantile(absSorted, 0.95) || 1;
-    const lo = Math.min(...drawn.map(r => r.perBene));
-    const hi = Math.max(...drawn.map(r => r.perBene));
+    const lo = drawn.length ? Math.min(...drawn.map(r => r.perBene)) : Infinity;
+    const hi = drawn.length ? Math.max(...drawn.map(r => r.perBene)) : -Infinity;
 
-    // tile map
-    const byState = Object.fromEntries(rows.map(r => [r.state, r]));
-    const map = document.getElementById("tilemap");
-    map.innerHTML = "";
-    for (const [st, [row, col]] of Object.entries(TILES)) {
-      const r = byState[st];
-      const d = document.createElement("div");
-      d.className = "tile";
-      d.style.gridRow = row; d.style.gridColumn = col;
-      d.textContent = st;
-      if (r && r.perBene !== null) {
-        const bg = diverging(r.perBene / bound);
-        d.style.background = bg;
-        d.style.color = inkOn(bg);
-        d.title = `${st} — geographic premium ${money(r.premium)} total, `
-          + `${money(r.perBene, 2)} per beneficiary-proxy`;
-      } else {
-        d.style.background = "var(--sheet)";
-        d.style.color = "var(--ink-3)";
-        d.title = `${st} — no data for this filter`;
-      }
-      if (filters.state !== "all") d.classList.add(st === filters.state ? "sel" : "dim");
-      map.appendChild(d);
-    }
-    document.getElementById("ramp").innerHTML =
-      Array.from({ length: 21 }, (_, i) =>
-        `<span style="background:${diverging(-1 + i / 10)}"></span>`).join("");
+    renderChoropleth(rows, filters, bound);
+    document.getElementById("ramp").innerHTML = hero1Legend(rows, bound);
     document.getElementById("rampScale").textContent = hero1Ramp(drawn, bound, lo, hi);
 
     // tornado: extremes at both ends, by total premium
@@ -94,14 +234,18 @@
 
     mount("cGeo", {
       type: "bar",
+      plugins: [ZERO_RULE],
       data: {
         labels: pick.map(r => r.state),
         datasets: [{
           label: "Geographic premium",
           data: pick.map(r => r.premium),
-          // Color encodes the sign, which is the point; it is not a series identity.
-          backgroundColor: pick.map(r => diverging(r.premium >= 0 ? 0.75 : -0.75)),
-          borderWidth: 0,
+          // Sign is position across the zero rule, reinforced by filled (above the
+          // standardized amount) vs hollow (below). The old two-hue ramp was always
+          // redundant with position, so this loses nothing and spends no second hue.
+          backgroundColor: pick.map(r => r.premium >= 0 ? T().series : T().sheet),
+          borderColor: T().series,
+          borderWidth: 1,
         }],
       },
       options: {
@@ -561,13 +705,15 @@
       .sort((a, b) => (a.savings || 0) - (b.savings || 0));
     mount("cSiteBar", {
       type: "bar",
+      plugins: [ZERO_RULE],
       data: {
         labels: bar.map(d => d.hcpcs),
         datasets: [{
           label: "Facility minus office, times facility volume",
           data: bar.map(d => d.savings),
-          backgroundColor: bar.map(d => diverging((d.savings || 0) >= 0 ? 0.75 : -0.75)),
-          borderWidth: 0,
+          backgroundColor: bar.map(d => (d.savings || 0) >= 0 ? T().series : T().sheet),
+          borderColor: T().series,
+          borderWidth: 1,
         }],
       },
       options: {
@@ -692,7 +838,7 @@
 
   root.MD = root.MD || {};
   root.MD.panels = {
-    TILES, TIER_LABELS,
+    TIER_LABELS, binOf, pathBox,
     renderKpis: renderStatics,   // alias: the ribbon and header render together
     renderHero1, renderHero2, renderHero3, renderHero4, renderHero5,
     renderProviders, renderStatics, geoByState,

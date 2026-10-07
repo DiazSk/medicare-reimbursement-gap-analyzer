@@ -217,3 +217,54 @@ test("hero 3 lets the Gini pick its own adjective", () => {
   assert.match(at(0.31), /is a relatively even distribution/);
   assert.doesNotMatch(at(0.31), /extreme/);
 });
+
+/* ── choropleth helpers ─────────────────────────────────────────────────────
+   Both are pure, and both encode a correctness claim that is invisible on screen:
+   pathBox decides where a label lands, and binOf decides which of four fills a state
+   gets. A silent off-by-one in either is a map that looks fine and is wrong. */
+
+test("pathBox reads a bounding box straight off the path's coordinate stream", () => {
+  // Every command in us-states.js is M or L with absolute x,y pairs, so the numbers
+  // alternate x,y and no path parser is needed. That assumption is what this pins.
+  const box = P.pathBox("M10 20L30 60L50 40");
+  assert.deepEqual(box, { cx: 30, cy: 40, w: 40, h: 40 });
+});
+
+test("pathBox handles the negative x the albers geometry actually starts at", () => {
+  // Alaska begins near x = -58. A box that clamped at 0 would mis-place its label.
+  const box = P.pathBox("M-58 500L-20 520");
+  assert.equal(box.cx, -39);
+  assert.ok(box.w > 0, "a negative-origin path must still have positive width");
+});
+
+test("pathBox returns null for a path with no coordinates", () => {
+  assert.equal(P.pathBox(""), null);
+});
+
+test("binOf quantises magnitude into exactly four bins, sign-independent", () => {
+  const bound = 10;
+  // Bin edges at 25/50/75% of the bound.
+  assert.equal(P.binOf(0, bound), 0);
+  assert.equal(P.binOf(2.4, bound), 0);
+  assert.equal(P.binOf(2.5, bound), 1);
+  assert.equal(P.binOf(4.9, bound), 1);
+  assert.equal(P.binOf(5.0, bound), 2);
+  assert.equal(P.binOf(7.4, bound), 2);
+  assert.equal(P.binOf(7.5, bound), 3);
+  assert.equal(P.binOf(10, bound), 3);
+  // Sign must not change the bin: it is carried by fill texture, not by the ramp.
+  for (const v of [2.5, 5.0, 7.5, 9.9]) {
+    assert.equal(P.binOf(-v, bound), P.binOf(v, bound),
+      `binOf(${-v}) and binOf(${v}) must land in the same bin`);
+  }
+});
+
+test("binOf clamps beyond the bound instead of indexing off the ramp", () => {
+  // The bound is a p95, so roughly 5% of states exceed it by construction -- Alaska
+  // at over twice the next state. An unclamped index would read ramp[4] === undefined
+  // and paint those states with fill="undefined".
+  const bound = 10;
+  assert.equal(P.binOf(10.0001, bound), 3);
+  assert.equal(P.binOf(1e9, bound), 3);
+  assert.equal(P.binOf(-1e9, bound), 3);
+});

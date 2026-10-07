@@ -97,13 +97,11 @@
   <p class="why">Medicare publishes both what it paid and a <em>standardized</em> amount that
      strips out geographic adjustment. The gap between them is the geographic premium: the part
      of the bill explained by location alone, not by the medicine.</p>
-  <div class="split">
+  <div class="split stacked">
     <div>
       <div class="tilemap" id="tilemap"></div>
       <div class="legend">
-        <span>Pays below standard</span>
         <span class="ramp" id="ramp"></span>
-        <span>Pays above standard</span>
         <span class="chip" id="rampScale"></span>
       </div>
     </div>
@@ -236,6 +234,7 @@
 <script src="js/format.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/guardrails.js"></script>
+<script src="js/us-states.js"></script>
 <script src="js/panels.js"></script>
 <!-- engine.js and live.js load before the boot script rather than after it, so
      the toggle can bind window.MD.live at parse time instead of lazily. -->

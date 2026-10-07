@@ -18,6 +18,7 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const DOCS = path.join(__dirname, "..");
 const read = (p) => fs.readFileSync(path.join(DOCS, p), "utf8");
@@ -281,4 +282,49 @@ test("no page loads a charting library, and none is vendored", () => {
   }
   const stray = fs.readdirSync(path.join(DOCS, "js")).filter((f) => /^chart[.-].*\.js$/i.test(f));
   assert.deepEqual(stray, [], "a chart*.js library is still vendored in docs/js");
+});
+
+/* Every <script src> and <link rel=stylesheet> that ships from this repo carries
+   ?v=<first 8 of the file's sha256>. pipeline/stamp_assets.py writes them; this
+   asserts they are current.
+
+   Why it matters more here than on a typical static site: these are classic scripts
+   sharing one global, and each module destructures names the others export. A browser
+   holding a stale format.js beside a fresh explore.js does not degrade -- it throws
+   "F(...).moneyTick is not a function" and renders nothing. GitHub Pages serves
+   max-age=600, so a visit straddling a deploy lands in exactly that window.
+
+   A hash nobody re-stamps is worse than no hash, because the tag then asserts a
+   freshness that is not true. This test is what makes forgetting loud. */
+const STAMPED = /<(?:script\s+src|link\s+rel="stylesheet"\s+href)="((?:js|css)\/[A-Za-z0-9._-]+)(\?v=([0-9a-f]+))?"/g;
+
+test("every shipped asset tag carries a current content hash", () => {
+  let checked = 0;
+  for (const [name, html] of [["index.html", index], ["explore.html", explore]]) {
+    for (const m of html.matchAll(STAMPED)) {
+      const [, asset, query, got] = m;
+      assert.ok(query, `${name}: <${asset}> has no ?v= stamp -- run python3 pipeline/stamp_assets.py`);
+      const want = crypto.createHash("sha256")
+        .update(fs.readFileSync(path.join(DOCS, asset))).digest("hex").slice(0, got.length);
+      assert.equal(got, want,
+        `${name}: ${asset} is stamped ?v=${got} but its content hashes to ${want}. ` +
+        "The file changed without a re-stamp -- run: python3 pipeline/stamp_assets.py");
+      checked++;
+    }
+  }
+  assert.ok(checked >= 15, `expected both pages' asset tags, only found ${checked}`);
+});
+
+test("the same asset gets the same stamp on both pages", () => {
+  // index.html and explore.html share format.js, charts.js, svg.js, engine.js,
+  // permalink.js and dash.css. Two different stamps for one file would mean one page
+  // was restamped and the other was not, which is the half-updated state this guards.
+  const seen = new Map();
+  for (const [name, html] of [["index.html", index], ["explore.html", explore]]) {
+    for (const [, asset, , got] of html.matchAll(STAMPED)) {
+      const prev = seen.get(asset);
+      if (prev) assert.equal(got, prev.got, `${asset} is ?v=${prev.got} in ${prev.name} but ?v=${got} in ${name}`);
+      else seen.set(asset, { got, name });
+    }
+  }
 });

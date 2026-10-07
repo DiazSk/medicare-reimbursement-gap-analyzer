@@ -209,6 +209,7 @@ pipeline/                  # Local reproduction harness (no Azure)
 ├── run_local.py           # Execute the notebook chain in one JVM
 ├── publish_dashboard.py   # Gold → payload, chained into the builder + parity gate
 ├── build_explorer_data.py # Gold → tiered Parquet
+├── stamp_assets.py        # Content-hash the dashboard's script/style tags
 ├── verify_explorer_parity.py
 └── RUN_LOG.md             # Transcript of real runs
 

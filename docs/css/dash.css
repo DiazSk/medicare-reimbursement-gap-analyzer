@@ -84,7 +84,10 @@
      band's height depends on its content. The fallback matters: with JS off, or before
      the script runs, an anchor jump still has to clear both bars. */
   html { scroll-behavior: smooth; scroll-padding-top: calc(var(--stick, 120px) + 16px); }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .seal svg { animation: none; }
+  }
   body {
     margin: 0; background: var(--sheet); color: var(--ink);
     font: 15px/1.55 var(--font-sans);
@@ -93,7 +96,11 @@
 
   header.page { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start;
     justify-content: space-between; margin-bottom: 8px; padding-top: 20px; }
-  header.page > div { flex: 1 1 420px; min-width: 0; }
+  /* :not(.seal) is load-bearing. The seal is ALSO a div child of header.page, and
+     this selector's specificity (0,1,2) beats .seal's (0,1,0) -- so `flex: 1 1 420px`
+     won over `flex: 0 0 auto; width: 132px` and stretched the seal to 586px. The SVG
+     then scaled into a 586x132 box and the ring sat centred in a box 4.4x too wide. */
+  header.page > div:not(.seal) { flex: 1 1 420px; min-width: 0; }
   h1 { font-size: 27px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
   .sub { color: var(--ink-2); font-size: 14px; margin: 0; max-width: 70ch; }
   .prov { color: var(--ink-3); font-size: 12.5px; margin: 10px 0 0; }
@@ -143,7 +150,13 @@
      error. No figure appears here on purpose; #prov renders the scale from the payload
      and a second hardcoded copy would go stale. */
   .seal { position: relative; width: 132px; height: 132px; flex: 0 0 auto; }
-  .seal svg { width: 100%; height: 100%; display: block; }
+  /* Only the <svg> rotates, never .sealctr -- the ring is type set on a circular
+     path and reads at any angle, while "Census / not a sample" must stay upright.
+     25s linear, matching the reference. The concentric disc and hairline are
+     rotation-invariant, so spinning the whole svg costs nothing. */
+  .seal svg { width: 100%; height: 100%; display: block;
+    animation: seal-spin 25s linear infinite; }
+  @keyframes seal-spin { to { transform: rotate(360deg); } }
   .seal .sealbg { fill: var(--seal); }
   .seal .sealline { fill: none; stroke: var(--ink); stroke-width: 0.6; opacity: 0.45; }
   .seal .sealtext { font-family: var(--font-mono); font-size: 7.2px; fill: var(--ink);

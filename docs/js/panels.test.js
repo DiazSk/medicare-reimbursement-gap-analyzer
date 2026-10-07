@@ -16,15 +16,13 @@
    2. Exercise the 1-cohort and 0-cohort branches, which only a human clicking
       through filters on a live page could otherwise reach.
 
-   panels.js needs a Chart global at load (charts.js writes Chart.defaults), but
-   the readouts themselves are DOM-free, which is why they are exported. */
+   The readouts themselves are DOM-free, which is why they are exported. */
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 
 global.window = {};
-global.Chart = { defaults: { font: {}, animation: false, maintainAspectRatio: false } };
 for (const f of ["format.js", "guardrails.js", "charts.js", "panels.js"]) {
   eval(fs.readFileSync(path.join(__dirname, f), "utf8"));
 }

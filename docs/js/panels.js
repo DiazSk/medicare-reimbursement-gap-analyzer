@@ -5,59 +5,9 @@
   "use strict";
 
   const { money, moneyTick, count, pct, quantile } = root.MD.format;
-  const { tokens, axisOpts, legendOpts, tooltipOpts, mount } = root.MD.charts;
-  const { reliability, patternPitch, isReliable } = root.MD.guardrails;
-  const { hatch } = root.MD.charts;
+  const { tokens } = root.MD.charts;
+  const { reliability, isReliable } = root.MD.guardrails;
   const T = () => tokens();
-
-  /* A 1px --ink rule at x = 0 on the diverging bar charts. Sign is already carried by
-     which side of zero a bar sits on; this just makes the datum visible, so the
-     filled/hollow channel is confirmation rather than the only cue.
-     Registered per-chart via `plugins: [ZERO_RULE]`, not globally: cLorenz and cSite
-     have a meaningful x = 0 that is an axis end, not a midpoint. */
-  const ZERO_RULE = {
-    id: "zeroRule",
-    afterDatasetsDraw(chart) {
-      const x = chart.scales.x, y = chart.scales.y;
-      if (!x || !y || x.min > 0 || x.max < 0) return;
-      const px = x.getPixelForValue(0);
-      const g = chart.ctx;
-      g.save();
-      g.beginPath();
-      g.moveTo(px, y.top);
-      g.lineTo(px, y.bottom);
-      g.lineWidth = 1;
-      g.strokeStyle = T().ink1;
-      g.stroke();
-      g.restore();
-    },
-  };
-
-  /* The selected row's band, drawn BEHIND the bars. A beforeDatasetsDraw plugin rather
-     than a ghost dataset: a dataset would appear in the legend, in the tooltip, and in
-     the stacking, and it would also have to carry a value. This draws and nothing else,
-     which is why selection can come off the bar's fill entirely.
-
-     Takes a getter, not a value: mount() builds the config once per render, and the
-     selected specialty changes between renders. */
-  const SEAL_BAND = (getSelected) => ({
-    id: "sealBand",
-    beforeDatasetsDraw(chart) {
-      const sel = getSelected();
-      if (!sel) return;
-      const y = chart.scales.y, x = chart.scales.x;
-      if (!y || !x) return;
-      const i = y.getLabels().indexOf(sel);
-      if (i < 0) return;
-      const h = Math.max(14, y.height / Math.max(1, y.getLabels().length));
-      const cy = y.getPixelForTick(i);
-      const g = chart.ctx;
-      g.save();
-      g.fillStyle = T().seal;
-      g.fillRect(x.left, cy - h / 2, x.width, h);
-      g.restore();
-    },
-  });
 
   /* ── choropleth support ─────────────────────────────────────────────────
      Geometry lives in us-states.js (us-atlas albers variant, pre-projected and
@@ -70,7 +20,7 @@
   const VIEWBOX = "-60 12 1085 595";
   const V = () => root.MD.svg;
 
-  /* The SVG analogue of mount(). dotPlot and dumbbellPlot cannot measure their own
+  /* Mounts an svg.js chart into its host. dotPlot and dumbbellPlot cannot measure their own
      host -- svg.js is deliberately DOM-free -- so the width is read here. Without it a
      caller silently gets a 760-wide viewBox in a 526px box and 7.3px labels, which is
      the defect this helper exists to make unrepeatable.
@@ -141,10 +91,9 @@
      choice: r300 is a bin, and a single luminance threshold picks white on it at
      2.50:1. That is why the ink comes from rampInk() below and not from a threshold. */
   /* Label ink per ramp bin, taken from the arithmetic rather than from a luminance
-     threshold. A single-threshold picker -- format.js's inkOn(), which this replaced
-     and which is now deleted -- CANNOT express this mapping: r300's relative
-     luminance is 0.3694, just under that 0.4 cutoff, so it chose white at 2.50:1
-     where --ink gives 7.11:1. Measured against each fill:
+     threshold. A single luminance-threshold picker CANNOT express this mapping:
+     r300's relative luminance is 0.3694, just under a 0.4 cutoff, so it would choose
+     white at 2.50:1 where --ink gives 7.11:1. Measured against each fill:
 
        bin 0  r100   --ink 13.45:1   white  1.32:1
        bin 1  r300   --ink  7.11:1   white  2.50:1
@@ -724,7 +673,7 @@
             { aria: "Facility against office payment per service, bubble area is facility volume" });
     })();
 
-    // Both directions on one diverging axis -- showing only the positive tail is
+    // Both directions on one signed axis -- showing only the positive tail is
     // how the original "savings" framing went wrong.
     const bar = view.siteBarNeg.slice(0, 8).concat(view.siteBarPos.slice(0, 8))
       .sort((a, b) => (b.savings || 0) - (a.savings || 0));

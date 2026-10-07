@@ -5,13 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Explore — Medicare Reimbursement Gap</title>
 <meta name="description" content="Query 9.66M rows of CMS Medicare physician claims in your browser.">
-<!-- Vendored, not CDN-loaded -- see docs/index.html's head comment for why.
-     Zero external requests on first paint, verified with
-     performance.getEntriesByType('resource'). -->
-<!-- No chart is drawn with this any more, but charts.js still writes Chart.defaults at
-     load and throws without it, taking tokens() and the whole page init down with it.
-     Task 10 strips charts.js and deletes this tag with it. -->
-<script src="js/chart.umd.min.js"></script>
 <link rel="stylesheet" href="css/dash.css">
 </head>
 <body>

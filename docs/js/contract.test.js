@@ -27,7 +27,7 @@ const explore = read("explore.html");
 const css = read("css/dash.css");
 const js = fs
   .readdirSync(path.join(DOCS, "js"))
-  .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js") && f !== "chart.umd.min.js")
+  .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js"))
   .map((f) => read("js/" + f))
   .join("\n");
 
@@ -38,7 +38,6 @@ function referencedIds() {
   const ids = new Set();
   for (const src of [js, index]) {
     for (const m of src.matchAll(/getElementById\("([^"]+)"\)/g)) ids.add(m[1]);
-    for (const m of src.matchAll(/\bmount\("([^"]+)"/g)) ids.add(m[1]);
   }
   return [...ids].sort();
 }
@@ -78,7 +77,7 @@ test("every class name JS writes has a rule in the stylesheet", () => {
   // tile/sel/dim went with the tile grid: the choropleth encodes selection on the SVG
   // path's own stroke, so no class is written for it. lk/lgroup are the legend keys.
   for (const cls of ["toggle", "l", "empty", "kpi", "label", "value", "note",
-                     "lk", "lgroup", "badge-reliability"]) {
+                     "lk", "lgroup", "badge-reliability", "figtitle"]) {
     // Boundary-aware: a bare substring check passes for `.emptyX`, so renaming the rule
     // would slip through. (Found by mutation-testing this very assertion.)
     const rule = new RegExp("\\." + cls + "(?![\\w-])");
@@ -146,7 +145,7 @@ test("the colour tokens JS reads are 6-digit hex literals", () => {
   // panels.js concatenates an alpha suffix onto --series as a STRING for hero 5's
   // bubbles (T().series + "b0"), and composes the choropleth's hatch patterns and the
   // heatmap's cell fills from these literals. A 3-digit, 8-digit, oklch() or rgb()
-  // value produces something the canvas cannot parse: the mark silently disappears, or
+  // value produces something the SVG attribute cannot parse: the mark silently disappears, or
   // the throw lands inside a render function where detach() swallows it into a
   // console.warn, leaving the KPI ribbon up and every panel below it blank.
   const read = [...js.matchAll(/css\("(--[a-z0-9-]+)"\)/g)].map((m) => m[1])
@@ -180,7 +179,7 @@ test("every name a module destructures from window.MD is actually exported", () 
      A static check is enough: the destructuring is top-level and literal in every
      module, and the export objects are literal too. */
   const files = fs.readdirSync(path.join(DOCS, "js"))
-    .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js") && f !== "chart.umd.min.js"
+    .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js")
                    && f !== "us-states.js");
 
   // module name -> the keys it puts on window.MD
@@ -271,4 +270,15 @@ test("every mountSvg chart is a <div> host, and no page draws on a <canvas>", ()
   assert.equal(index.match(/<canvas/g), null, "index.html must have no <canvas");
   assert.equal(explore.match(/<canvas/g), null, "explore.html must have no <canvas");
   assert.match(explore, /<div[^>]*\bid="pChart"/, "#pChart must be a <div> in explore.html");
+});
+
+test("no page loads a charting library, and none is vendored", () => {
+  // The other half of the canvas guard above. A leftover <script> for Chart.js would
+  // still load and nothing would draw with it; a vendored copy would ship 200 KB dead.
+  for (const [name, html] of [["index.html", index], ["explore.html", explore]]) {
+    assert.ok(!/chart\.umd|chart\.min|\bChart\.js\b|cdn\.jsdelivr\.net\/npm\/chart/i.test(html),
+      `${name} still references a charting library`);
+  }
+  const stray = fs.readdirSync(path.join(DOCS, "js")).filter((f) => /^chart[.-].*\.js$/i.test(f));
+  assert.deepEqual(stray, [], "a chart*.js library is still vendored in docs/js");
 });

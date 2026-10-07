@@ -30,20 +30,12 @@
       : `n=${shown} · below CMS's suppression floor`;
   }
 
-  /* Reliability used to ride on OPACITY -- 1 / 0.55 / 0.4 over a coloured bar. That put
-     the two warning states at 2.05:1 and 1.67:1 against the sheet, so the bars this
-     guardrail exists to flag were the least legible things on the page. Exactly backwards.
-
-     It is a HATCH PITCH now: 0 means solid, otherwise the tile size in px, so a thinner
-     cohort gets a sparser interior. The mark keeps a 1px --series border in every state,
-     which holds the silhouette at 4.03:1 however sparse the fill -- so the warning reads
-     as a warning without making the warned number harder to see. */
-  const PATTERN_PITCH = { ok: 0, thin: 7, "very-thin": 12 };
-  const patternPitch = (level) => PATTERN_PITCH[level] ?? 0;
-
-  /* The dot plot's filled/hollow channel needs a boolean, not a pitch. Kept as a
-     separate function rather than overloading patternPitch, so each is named for
-     the one channel it drives: pitch for the choropleth's hatch, this for a dot. */
+  /* The dot plot's filled/hollow channel: a reliable cohort is a filled dot, a thin or
+     very-thin one is hollow. The mark keeps a 1px --series outline either way, which
+     holds the silhouette at 4.03:1 -- so the warning reads as a warning without making
+     the warned number harder to see. (Reliability used to ride on opacity, which put
+     both warning states under 2.1:1 against the sheet -- exactly backwards.) An unknown
+     level is NOT reliable. */
   const isReliable = (level) => level === "ok";
 
   function applyBadge(el, n) {
@@ -55,6 +47,6 @@
   }
 
   root.MD = root.MD || {};
-  root.MD.guardrails = { RELIABLE, WEAK, reliability, badgeText, patternPitch,
+  root.MD.guardrails = { RELIABLE, WEAK, reliability, badgeText,
                          isReliable, applyBadge };
 })(typeof window !== "undefined" ? window : globalThis);

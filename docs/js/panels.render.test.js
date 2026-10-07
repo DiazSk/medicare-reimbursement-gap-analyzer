@@ -22,8 +22,6 @@ global.document = { getElementById: host, documentElement: {} };
 const TOK = { "--series": "#2a78d6", "--ink-3": "#6b6d72", "--hair": "#c9c7c4", "--sheet": "#f5f4f6" };
 global.getComputedStyle = () => ({ getPropertyValue: (k) => TOK[k] || "#000000" });
 global.window = {};
-global.Chart = { defaults: { font: {}, animation: false, maintainAspectRatio: false,
-                             plugins: { title: {} } } };
 for (const f of ["format.js", "guardrails.js", "charts.js", "svg.js", "panels.js"]) {
   eval(fs.readFileSync(path.join(__dirname, f), "utf8"));
 }

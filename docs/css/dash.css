@@ -1,6 +1,6 @@
 /* Self-hosted variable woff2, latin subset, both SIL OFL (Schibsted Grotesk, Geist
-   Mono), taken from Google's own CDN. Self-hosted for the same reason
-   chart.umd.min.js is vendored: first paint makes zero external requests.
+   Mono), taken from Google's own CDN. Self-hosted so first paint makes zero external
+   requests.
 
    The fallback stacks are real stacks, not decoration, because the page has to stay
    legible with no webfont at all. Measured 2026-10-07: Chrome DOES load these over
@@ -75,7 +75,7 @@
     --regmark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M6 0v12M0 6h12' stroke='%236b6d72' stroke-width='.7' opacity='.55'/%3E%3C/svg%3E");
     --radius: 0;
     --gap: 18px;
-    /* charts.js:readTokens() reads --font-sans into Chart.defaults.font.family. */
+    /* charts.js:readTokens() reads --font-sans into the token object. */
     --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
@@ -249,20 +249,12 @@
      the element: at 1.15fr of a two-column split it rendered at 0.56 and put the state
      codes at 5.3px. Full measure puts them back over 10px. */
   .split.stacked { grid-template-columns: 1fr; }
-  /* Sizes an SVG child now, not a canvas. height:auto because an SVG scales to
-     its viewBox and a fixed height would letterbox it. The canvas-holding boxes
-     (still Chart.js until the later tasks convert them) keep their fixed height. */
-  .chartbox { position: relative; height: 330px; }
-  .chartbox:not(:has(canvas)) { height: auto; }
-  /* .chartbox.tall is (0,2,0) and beats :not(:has(canvas)) at (0,1,1), so the tall
-     variant needs its own opt-out or every tall SVG host stays letterboxed at 430px.
-     Both collapse into the plain rule once the last canvas goes. */
-  .chartbox.tall:not(:has(canvas)) { height: auto; }
+  /* No fixed height: an SVG scales to its viewBox, so a set height would letterbox it. */
+  .chartbox { position: relative; }
   .chartbox > svg { width: 100%; height: auto; display: block; }
   .chartbox svg text { font-family: var(--font-mono); }
   .figtitle { font-size: 13px; font-weight: 600; margin: 0 0 8px;
     color: var(--ink); }
-  .chartbox.tall { height: 430px; }
 
   /* Choropleth over real geometry (us-atlas albers variant, inlined by
      js/us-states.js). No geo library and no projection code: the source is already
@@ -427,10 +419,7 @@
     .showtbl::details-content { content-visibility: visible !important; }
     .tblwrap { overflow: visible; }
 
-    /* Chart heights are deliberately NOT overridden here. Chart.js sizes the canvas
-       once, to the box it measured on screen, and shrinking .chartbox in print does not
-       re-render it -- the canvas overflows and paints over the readout underneath.
-       Measured on hero 5. The SVG map is immune, being vector, so it alone is capped. */
+    /* The charts are vector SVG, so they print as they render. Only the map is capped. */
     .tilemap svg { max-height: 420px; }
     /* Two columns on paper as well: stacking doubles the height of every split plate. */
     .split { grid-template-columns: 1fr 1fr; gap: 14px; }

@@ -5,18 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Medicare Reimbursement Gap Analyzer — CMS 2023</title>
 <meta name="description" content="Five billing-anomaly insights from 9.66M rows of CMS Medicare physician claims, built on a Bronze/Silver/Gold lakehouse with PySpark and Delta Lake.">
-<!-- Chart.js 4.5.1, vendored on purpose. Loading it from a CDN made the entire
-     narrative a single point of failure: on a network that blocks cdn.jsdelivr.net,
-     Chart was undefined, charts.js threw at load, and the cascade emptied the KPI
-     ribbon and removed all 8 charts, leaving only prose. This copy is byte-identical
-     to the CDN's -- verify with
-       openssl dgst -sha384 -binary docs/js/chart.umd.min.js | openssl base64 -A
-     which must print
-       jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ
-     No integrity/crossorigin attributes: both are meaningless for a same-origin file.
-     The static narrative now has zero external dependencies. DuckDB still comes from
-     jsdelivr, but only on demand, and explore mode degrades politely without it. -->
-<script src="js/chart.umd.min.js"></script>
+<!-- No charting library: every chart is hand-drawn SVG from js/svg.js. The static narrative
+     has zero external dependencies. DuckDB still comes from jsdelivr, but only on demand,
+     and explore mode degrades politely without it. -->
 <link rel="stylesheet" href="css/dash.css">
 </head>
 <body>
@@ -539,11 +530,10 @@ function init() {
   // An unsupported browser ignores live=1 silently: the visitor didn't ask for
   // it, only the shared link did, so it degrades to the static summary rather
   // than surfacing an error.
-  // Chart.js measures every label with whatever font is active when the chart is
-  // constructed, and never remeasures. On a cold cache the webfont is still in flight at
-  // first paint, so all eight charts lay out with fallback metrics and the y-axis labels
-  // clip. It shows on a FIRST load only -- invisible on reload and invisible from a warm
-  // worktree, which is why it has to be handled here and cannot be caught in review.
+  // A first-load font swap. Kept from the canvas-library era, when labels were measured once at
+  // construction and never again, so a cold cache laid every chart out with fallback
+  // metrics. svg.js sizes from character counts, so this repaint is probably redundant
+  // now -- NOT verified, hence left in place.
   // check() is false exactly while the swap is still pending, so a warm cache skips all
   // of this and pays nothing.
   const fontPending = !!document.fonts && !document.fonts.check('12px "Schibsted Grotesk"');

@@ -41,18 +41,6 @@ test("very thin cohorts name the CMS floor", () => {
   assert.match(G.badgeText(4), /suppression floor/i);
 });
 
-test("opacity de-emphasises without hiding", () => {
-  assert.equal(G.patternPitch("ok"), 0, "ok is solid: pitch 0 means no hatch at all");
-  assert.equal(G.patternPitch("thin"), 7);
-  assert.equal(G.patternPitch("very-thin"), 12);
-  // A sparser interior for a thinner cohort: that ordering is the whole claim.
-  assert.ok(G.patternPitch("very-thin") > G.patternPitch("thin"),
-    "very-thin must hatch more sparsely than thin");
-  // Never zero: the number must always remain visible.
-  // An unknown level falls back to SOLID, never to an invisible fill.
-  assert.equal(G.patternPitch("nonsense"), 0);
-});
-
 test("missing cohort size is treated as unreliable, not reliable", () => {
   assert.equal(G.reliability(null), "very-thin");
   assert.equal(G.reliability(undefined), "very-thin");
@@ -156,9 +144,7 @@ test("applyBadge consistency: data-reliability always matches reliability(n)", (
 });
 
 test("isReliable is true only for ok", () => {
-  // The dot plot needs a boolean for its filled/hollow channel. patternPitch
-  // keeps its name and its job -- the choropleth's below-standard hatch genuinely
-  // is a pitch -- so each function is named for the one channel it drives.
+  // The dot plot needs a boolean for its filled/hollow channel.
   assert.equal(G.isReliable("ok"), true);
   assert.equal(G.isReliable("thin"), false);
   assert.equal(G.isReliable("very-thin"), false);
@@ -167,9 +153,13 @@ test("isReliable is true only for ok", () => {
   assert.equal(G.isReliable(undefined), false);
 });
 
-test("isReliable and patternPitch agree about which levels are flagged", () => {
-  for (const level of ["ok", "thin", "very-thin"]) {
-    assert.equal(G.isReliable(level), G.patternPitch(level) === 0,
-      `the two channels disagree about "${level}"`);
+test("isReliable and the badge flag exactly the same cohorts", () => {
+  // Hero 2's filled/hollow channel (isReliable) and the badge beside it (applyBadge)
+  // are two views of one verdict. If they disagree, a hollow dot ships with no
+  // warning, or a warning ships on a filled dot.
+  for (const n of [null, undefined, 0, 4, 5, 10, 11, 29, 30, 31, 100, 500, 1e6]) {
+    const el = elStub();
+    G.applyBadge(el, n);
+    assert.equal(G.isReliable(G.reliability(n)), el.hidden, `n=${n}`);
   }
 });

@@ -132,3 +132,71 @@ test("esc neutralises the SVG-breaking characters in CMS free text", () => {
   assert.equal(S.esc(null), "");
   assert.equal(S.esc(42), "42");
 });
+
+test("dot(filled:false) is a sheet interior inside a series stroke", () => {
+  // This is the contrast mechanism: a hollow mark's outline carries 4.03:1
+  // whatever sits behind its interior, which is what makes hollow/filled a legal
+  // encoding channel where a second hue would not be.
+  const hollow = S.dot(10, 20, 4, { filled: false, series: "#2a78d6", sheet: "#f5f4f6" });
+  assert.match(hollow, /fill="#f5f4f6"/);
+  assert.match(hollow, /stroke="#2a78d6"/);
+  const solid = S.dot(10, 20, 4, { filled: true, series: "#2a78d6", sheet: "#f5f4f6" });
+  assert.match(solid, /fill="#2a78d6"/);
+});
+
+test("dot carries its tooltip text as both data-tip and a <title>", () => {
+  // data-tip drives the shared hover tip; <title> is the screen-reader and
+  // touch fallback, which is what the choropleth already relies on.
+  const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff",
+                             tip: "Obstetrics & Gynecology" });
+  assert.match(d, /data-tip="Obstetrics &amp; Gynecology"/);
+  assert.match(d, /<title>Obstetrics &amp; Gynecology<\/title>/);
+});
+
+test("dot emits no tip attributes when no tip is given", () => {
+  const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff" });
+  assert.ok(!d.includes("data-tip"), "an absent tip must not become an empty one");
+  assert.ok(!d.includes("<title>"));
+});
+
+test("rule draws a horizontal hairline at the given y", () => {
+  const r = S.rule(0, 300, 40, { stroke: "#c9c7c4" });
+  assert.match(r, /x1="0"/);
+  assert.match(r, /x2="300"/);
+  assert.match(r, /y1="40"/);
+  assert.match(r, /y2="40"/);
+});
+
+test("dumbbell connects two dots and weights the smaller cohort lighter", () => {
+  const d = S.dumbbell(10, 90, 50, { series: "#2a78d6", sheet: "#f5f4f6",
+                                     whisker: "#86b6ef" });
+  assert.match(d, /<line/, "the pair needs its connector");
+  assert.equal((d.match(/<circle/g) || []).length, 2, "exactly two dots");
+  assert.match(d, /#86b6ef/, "the lighter cohort uses --whisker");
+});
+
+test("pathLine emits one move and the rest lineto, and nothing for empty input", () => {
+  const p = S.pathLine([[0, 0], [10, 5], [20, 2]], { stroke: "#2a78d6" });
+  assert.match(p, /d="M0,0L10,5L20,2"/);
+  assert.equal(S.pathLine([], { stroke: "#000" }), "",
+    "no points means no path element at all, not an empty d=''");
+});
+
+test("pathLine takes an explicit dash for a reference line", () => {
+  const p = S.pathLine([[0, 0], [1, 1]], { stroke: "#6b6d72", dash: "5 4" });
+  assert.match(p, /stroke-dasharray="5 4"/);
+});
+
+test("bubble keeps an explicit stroke, which is its compliance mechanism", () => {
+  // hero 5's fill is --series at 69% alpha, which is 2.53:1 on its own. The 1px
+  // border is what makes the mark legal, so it is not optional.
+  const b = S.bubble(5, 6, 12, { fill: "#2a78d6b0", stroke: "#2a78d6" });
+  assert.match(b, /r="12"/);
+  assert.match(b, /stroke="#2a78d6"/);
+  assert.match(b, /stroke-width="1"/);
+});
+
+test("every mark rounds coordinates so the markup stays diffable", () => {
+  const d = S.dot(10.123456, 20.987654, 4, { filled: true, series: "#000", sheet: "#fff" });
+  assert.ok(!/\d\.\d{3,}/.test(d), `coordinates should be short, got: ${d}`);
+});

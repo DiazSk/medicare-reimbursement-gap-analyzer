@@ -112,6 +112,68 @@
     return out.length >= 2 ? out : [lo, hi];
   }
 
+  /* ── marks ──────────────────────────────────────────────────────────────── */
+
+  // Two decimals is below a device pixel at every size this page draws, and it
+  // keeps the markup diffable when a renderer is changed.
+  const n2 = (v) => (Math.round(v * 100) / 100).toString();
+
+  // data-tip drives the one shared hover tip; <title> is the screen-reader and
+  // touch fallback. Both or neither -- an empty <title> is an empty announcement.
+  function tipParts(tip) {
+    if (tip === null || tip === undefined || tip === "") return { attr: "", child: "" };
+    const t = esc(tip);
+    return { attr: ` data-tip="${t}"`, child: `<title>${t}</title>` };
+  }
+
+  function rule(x1, x2, y, o) {
+    return `<line x1="${n2(x1)}" y1="${n2(y)}" x2="${n2(x2)}" y2="${n2(y)}" `
+      + `stroke="${o.stroke}" stroke-width="${o.width == null ? 1 : o.width}"/>`;
+  }
+
+  /* Hollow is --sheet interior inside a --series stroke, so the OUTLINE carries
+     the contrast -- 4.03:1 regardless of what sits behind the interior. That is
+     what makes filled/hollow a legal encoding channel. */
+  function dot(x, y, r, o) {
+    const t = tipParts(o.tip);
+    return `<circle cx="${n2(x)}" cy="${n2(y)}" r="${n2(r)}" `
+      + `fill="${o.filled ? o.series : o.sheet}" stroke="${o.series}" `
+      + `stroke-width="1"${t.attr}>${t.child}</circle>`;
+  }
+
+  function dumbbell(xA, xB, y, o) {
+    const r = o.r == null ? 4 : o.r;
+    const t = tipParts(o.tip);
+    return `<g${t.attr}>${t.child}`
+      + rule(xA, xB, y, { stroke: o.series, width: 1 })
+      // B is the smaller cohort by convention, drawn in --whisker inside the same
+      // --series stroke so it reads lighter without spending a second hue.
+      + `<circle cx="${n2(xB)}" cy="${n2(y)}" r="${n2(r)}" fill="${o.whisker}" `
+      + `stroke="${o.series}" stroke-width="1"/>`
+      + `<circle cx="${n2(xA)}" cy="${n2(y)}" r="${n2(r)}" fill="${o.series}" `
+      + `stroke="${o.series}" stroke-width="1"/>`
+      + `</g>`;
+  }
+
+  function pathLine(points, o) {
+    if (!points || !points.length) return "";
+    const d = points
+      .map((p, i) => (i ? "L" : "M") + n2(p[0]) + "," + n2(p[1]))
+      .join("");
+    return `<path d="${d}" fill="none" stroke="${o.stroke}" `
+      + `stroke-width="${o.width == null ? 1 : o.width}"`
+      + (o.dash ? ` stroke-dasharray="${o.dash}"` : "") + `/>`;
+  }
+
+  /* The explicit 1px stroke is the compliance mechanism, not decoration: hero 5's
+     fill is --series at 69% alpha, which is 2.53:1 on its own. */
+  function bubble(x, y, r, o) {
+    const t = tipParts(o.tip);
+    return `<circle cx="${n2(x)}" cy="${n2(y)}" r="${n2(r)}" fill="${o.fill}" `
+      + `stroke="${o.stroke}" stroke-width="1"${t.attr}>${t.child}</circle>`;
+  }
+
   root.MD = root.MD || {};
-  root.MD.svg = { esc, scaleLinear, scaleLog, scaleBand, niceTicks };
+  root.MD.svg = { esc, scaleLinear, scaleLog, scaleBand, niceTicks,
+                  rule, dot, dumbbell, pathLine, bubble };
 })(typeof window !== "undefined" ? window : globalThis);

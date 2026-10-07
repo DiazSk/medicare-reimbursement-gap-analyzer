@@ -15,6 +15,7 @@
   const E = () => root.MD.engine;
   const F = () => root.MD.format;
   const C = () => root.MD.charts;
+  const S = () => root.MD.svg;
   const PL = () => root.MD.permalink;
 
   const DIMENSIONS = [
@@ -169,30 +170,31 @@
     return `${String(r[rows]).slice(0, budget)} · ${String(r[cols]).slice(0, budget)}`;
   }
 
+  /* The explorer uses the same dot plot as the findings page. Orientation is now
+     unconditional: the old code drew vertically at 8 rows or fewer, but pivot labels
+     are long category strings that read better horizontally, so dotPlot has no
+     vertical mode. The data arrives ORDER BY value DESC and scaleBand puts index 0 at
+     the top, so there is deliberately no .reverse(). */
+  const dimLabel = (k) => (DIMENSIONS.find((d) => d.key === k) || { label: k }).label;
+
   function renderChart(data, rows, cols, m) {
-    const T = C().tokens();
-    const top = data.slice(0, 25).reverse();
-    C().mount("pChart", {
-      type: "bar",
-      data: {
-        labels: top.map((r) => chartLabel(r, rows, cols)),
-        datasets: [{
-          label: m.label, data: top.map((r) => r.value),
-          backgroundColor: T.series, borderWidth: 0,
-        }],
-      },
-      options: {
-        // Horizontal once labels are many -- vertical ticks become unreadable.
-        indexAxis: top.length > 8 ? "y" : "x",
-        plugins: {
-          legend: C().legendOpts(false),
-          tooltip: C().tooltipOpts({ label: (c) => ` ${m.format(c.raw)}` }),
-        },
-        scales: {
-          x: C().axisOpts(m.label, (v) => m.format(v)),
-          y: C().axisOpts(null, null, { grid: { display: false } }),
-        },
-      },
+    const top = data.slice(0, 25);
+    /* explore.html does not load panels.js, so mountSvg is unavailable and the host is
+       read directly. The width is NOT optional -- omitting it gives a 760-wide viewBox
+       in a smaller box and sub-8px labels. */
+    const host = document.getElementById("pChart");
+    host.innerHTML = S().dotPlot({
+      t: C().tokens(),
+      width: host.clientWidth || 760,
+      rows: top,
+      label: (r) => chartLabel(r, rows, cols),
+      value: (r) => r.value,
+      fmt: (v) => m.format(v),
+      fmtValue: (v) => m.format(v),
+      axisTitle: m.label,
+      aria: cols ? `${m.label} by ${dimLabel(rows)} and ${dimLabel(cols)}`
+                 : `${m.label} by ${dimLabel(rows)}`,
+      tip: (r) => `${chartLabel(r, rows, cols)} \u00b7 ${m.format(r.value)}`,
     });
   }
 
@@ -258,9 +260,9 @@
       const pFilterVal = document.getElementById("pFilterVal");
       pFilterVal.value = pick(pFilterVal, saved.filterVal, "all");
 
-      // The engine load normally outlasts the font swap, but don't lean on that:
-      // Chart.js measures pChart's labels once at construction and never remeasures, so
-      // painting before the swap clips them for the rest of the session.
+      // Let the font swap land before first paint so the table does not reflow under
+      // the reader. (The chart does not care: svg.js sizes its label gutter from
+      // character count, never from measured text.)
       if (document.fonts) await document.fonts.ready;
       await run();
     } catch (err) {

@@ -147,11 +147,8 @@ function loadWithDom() {
       },
       format: { money: (v) => String(v), count: (v) => String(v), pct: (v) => String(v) },
       permalink: { read: () => ({}), write: () => {} },
-      charts: {
-        readTokens: () => {}, tokens: () => ({ s1: "x" }),
-        axisOpts: () => ({}), legendOpts: () => ({}), tooltipOpts: () => ({}),
-        mount: () => {},
-      },
+      charts: { readTokens: () => {}, tokens: () => ({ s1: "x" }) },
+      svg: { dotPlot: () => "" },
     },
   };
   global.window = win;

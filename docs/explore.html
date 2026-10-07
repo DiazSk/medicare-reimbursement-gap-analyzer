@@ -8,6 +8,9 @@
 <!-- Vendored, not CDN-loaded -- see docs/index.html's head comment for why.
      Zero external requests on first paint, verified with
      performance.getEntriesByType('resource'). -->
+<!-- No chart is drawn with this any more, but charts.js still writes Chart.defaults at
+     load and throws without it, taking tokens() and the whole page init down with it.
+     Task 10 strips charts.js and deletes this tag with it. -->
 <script src="js/chart.umd.min.js"></script>
 <link rel="stylesheet" href="css/dash.css">
 </head>
@@ -35,7 +38,7 @@
     <div class="f"><label>&nbsp;</label><button class="toggle" id="pRun" type="button">Run</button></div>
     <p class="hint" id="pStatus">Loading the query engine…</p>
   </div>
-  <div class="chartbox tall"><canvas id="pChart"></canvas></div>
+  <div class="chartbox tall" id="pChart"></div>
   <div class="tblwrap"><table id="pTable"></table></div>
   <p class="read">Counts shown are cube rows at the selected grain, not distinct providers —
     arbitrary grains cannot be precomputed. Load the provider table for exact provider counts.</p>
@@ -68,6 +71,7 @@
 <script src="js/charts.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/permalink.js"></script>
+<script src="js/svg.js"></script>
 <script src="js/explore.js"></script>
 </body>
 </html>

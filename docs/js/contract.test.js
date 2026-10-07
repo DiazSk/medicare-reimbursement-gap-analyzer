@@ -267,10 +267,6 @@ test("every mountSvg chart is a <div> host, and no page draws on a <canvas>", ()
     assert.match(index, new RegExp(`<div[^>]*\\bid="${id}"`), `#${id} must be a <div> in index.html`);
   }
   assert.equal(index.match(/<canvas/g), null, "index.html must have no <canvas");
-  /* explore.html's pChart is the one remaining Chart.js canvas; Task 9 converts it.
-     This is an allowlist of exactly one, so a SECOND canvas is still a failure, and
-     Task 9 should empty it. */
-  assert.deepEqual([...explore.matchAll(/<canvas[^>]*\bid="([^"]+)"/g)].map((m) => m[1]),
-                   ["pChart"]);
-  assert.equal((explore.match(/<canvas/g) || []).length, 1);
+  assert.equal(explore.match(/<canvas/g), null, "explore.html must have no <canvas");
+  assert.match(explore, /<div[^>]*\bid="pChart"/, "#pChart must be a <div> in explore.html");
 });

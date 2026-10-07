@@ -328,3 +328,24 @@ test("the same asset gets the same stamp on both pages", () => {
     }
   }
 });
+
+test("the hover tip is loaded on every page that draws marks", () => {
+  /* svg.js has emitted data-tip since the SVG conversion, but nothing read it: the
+     attributes shipped and the consumer did not, so hovering fell through to the
+     browser's native <title> -- slow, unstyled, and read by the owner as "no data".
+     A page that draws marks and does not load tip.js is back in that state, and
+     nothing else in this suite can tell. */
+  for (const [name, html] of [["index.html", index], ["explore.html", explore]]) {
+    assert.match(html, /<script src="js\/tip\.js(\?v=[0-9a-f]+)?"><\/script>/,
+      `${name} draws marks but never loads js/tip.js`);
+  }
+});
+
+test("tip.js is the only thing that styles .tip, and dash.css actually does", () => {
+  // The module adds class="tip"; without the stylesheet it is an unstyled div of
+  // text dropped at the cursor, which looks like a rendering bug rather than a tip.
+  assert.match(css, /\.tip\s*\{/, "dash.css has no .tip rule");
+  assert.match(css, /\.tip\.on\s*\{/, "dash.css never reveals the tip");
+  assert.match(css, /pointer-events:\s*none/, ".tip must not eat its own hover");
+});
+

@@ -8,7 +8,7 @@
 <!-- No charting library: every chart is hand-drawn SVG from js/svg.js. The static narrative
      has zero external dependencies. DuckDB still comes from jsdelivr, but only on demand,
      and explore mode degrades politely without it. -->
-<link rel="stylesheet" href="css/dash.css?v=5c436ae6">
+<link rel="stylesheet" href="css/dash.css?v=9b9e3f48">
 </head>
 <body>
 <header class="bar"><div class="wrap">
@@ -69,7 +69,6 @@
     <svg viewBox="0 0 120 120">
       <defs><path id="sealring" d="M60,60 m-45,0 a45,45 0 1,1 90,0 a45,45 0 1,1 -90,0"/></defs>
       <circle cx="60" cy="60" r="58" class="sealbg"/>
-      <circle cx="60" cy="60" r="49" class="sealline"/>
       <text class="sealtext"><textPath href="#sealring" startOffset="0"
         >Every billing provider &middot; Complete enumeration &middot; CMS CY2023 &middot; </textPath></text>
     </svg>
@@ -276,8 +275,9 @@
 <script src="js/charts.js?v=fdc6692b"></script>
 <script src="js/guardrails.js?v=b1c99f3b"></script>
 <script src="js/us-states.js?v=13104246"></script>
-<script src="js/svg.js?v=7f820ee2"></script>
-<script src="js/panels.js?v=b191666d"></script>
+<script src="js/svg.js?v=249f6e59"></script>
+<script src="js/panels.js?v=edd19a76"></script>
+<script src="js/tip.js?v=528b5b98"></script>
 <!-- engine.js and live.js load before the boot script rather than after it, so
      the toggle can bind window.MD.live at parse time instead of lazily. -->
 <script src="js/engine.js?v=fc322508"></script>

@@ -50,7 +50,10 @@
     --ink:    #16181a;   /* 16.24:1 */
     --ink-2:  #4f5156;   /*  7.24:1 */
     --ink-3:  #6b6d72;   /*  4.72:1 -- the lowest legal text ink. Nothing goes below it. */
-    --hair:   #c9c7c4;   /*  1.54:1 -- hairlines only. Never a mark, never text. */
+    --hair:   #c9c7c4;   /*  1.54:1 ON SHEET -- hairlines only there, never a mark,
+                               never text. On --ink it measures 10.55:1, which is why
+                               the hover tip's label and note may use it: that is a
+                               different plane, not an exception to the rule. */
 
     /* One hue family for data marks. Sign is carried by shape and position, never by a
        second hue. --series is a MARK colour: 4.03:1 is legal for a graphical object and
@@ -127,9 +130,13 @@
   .nav a { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
     letter-spacing: 0.1em; padding: 7px 9px; color: var(--ink-2);
     text-decoration: none; white-space: nowrap; }
+  /* The ink fill and the hover outline both ease, so moving between sections reads
+     as a transition rather than a jump cut. Short enough not to lag the click. */
+  .nav a { transition: background-color .15s ease, color .15s ease, box-shadow .15s ease; }
   .nav a[aria-current] { background: var(--ink); color: var(--sheet); }
   .nav a:not([aria-current]):hover { box-shadow: inset 0 0 0 1px var(--ink);
     color: var(--ink); }
+  @media (prefers-reduced-motion: reduce) { .nav a { transition: none; } }
   .btn { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
     letter-spacing: 0.1em; padding: 8px 11px; color: var(--ink);
     text-decoration: none; box-shadow: inset 0 0 0 1px var(--ink);
@@ -158,7 +165,6 @@
     animation: seal-spin 25s linear infinite; }
   @keyframes seal-spin { to { transform: rotate(360deg); } }
   .seal .sealbg { fill: var(--seal); }
-  .seal .sealline { fill: none; stroke: var(--ink); stroke-width: 0.6; opacity: 0.45; }
   .seal .sealtext { font-family: var(--font-mono); font-size: 7.2px; fill: var(--ink);
     text-transform: uppercase; letter-spacing: 0.14em; }
   .sealctr { position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -250,6 +256,29 @@
      codes at 5.3px. Full measure puts them back over 10px. */
   .split.stacked { grid-template-columns: 1fr; }
   /* No fixed height: an SVG scales to its viewBox, so a set height would letterbox it. */
+  /* The one shared hover tip, driven by js/tip.js off the data-tip-* attributes
+     every mark carries. pointer-events:none so it never eats the hover that is
+     keeping it open; position:fixed because tip.js places it in viewport
+     coordinates and a scrolled ancestor would otherwise offset it.
+
+     Ink on sheet, square, no radius -- the same plane as the plates, so it reads as
+     part of the drawing rather than an OS tooltip. */
+  .tip { position: fixed; z-index: 30; pointer-events: none; max-width: 260px;
+    background: var(--ink); color: var(--sheet); padding: 10px 12px;
+    font: 400 12.5px/1.45 var(--font-sans);
+    box-shadow: 0 10px 30px -12px rgba(22, 24, 26, 0.5);
+    opacity: 0; transform: translateY(4px);
+    transition: opacity .12s ease, transform .12s ease; }
+  .tip.on { opacity: 1; transform: none; }
+  /* The label is the entity, set in mono caps like every other piece of metadata
+     on the page; the value is the number the reader came for. */
+  .tip .mono { display: block; margin-bottom: 4px; font-family: var(--font-mono);
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--hair); }
+  .tip b { font-weight: 600; }
+  .tip .note { display: block; margin-top: 4px; color: var(--hair); font-size: 11.5px; }
+  @media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
+
   .chartbox { position: relative; }
   .chartbox > svg { width: 100%; height: auto; display: block; }
   .chartbox svg text { font-family: var(--font-mono); }

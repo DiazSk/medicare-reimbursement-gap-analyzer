@@ -202,7 +202,7 @@
       axisTitle: m.label,
       aria: cols ? `${m.label} by ${dimLabel(rows)} and ${dimLabel(cols)}`
                  : `${m.label} by ${dimLabel(rows)}`,
-      tip: (r) => `${chartLabel(r, rows, cols)} \u00b7 ${m.format(r.value)}`,
+      tip: (r) => ({ label: chartLabel(r, rows, cols), value: m.format(r.value) }),
     });
   }
 

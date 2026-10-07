@@ -146,20 +146,44 @@ test("dot(filled:false) is a sheet interior inside a series stroke", () => {
   assert.match(solid, /fill="#2a78d6"/);
 });
 
-test("dot carries its tooltip text as both data-tip and a <title>", () => {
-  // data-tip drives the shared hover tip; <title> is the screen-reader and
-  // touch fallback, which is what the choropleth already relies on.
+test("dot carries its tip as structured parts plus a composed <title>", () => {
+  /* The hover layer reads the parts separately so it can set the label in grey mono
+     above a bold value. <title> stays as ONE composed string: a screen reader
+     announces an element's title as a single utterance, and three sibling attributes
+     would announce as nothing at all. */
   const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff",
-                             tip: "Obstetrics & Gynecology" });
-  assert.match(d, /data-tip="Obstetrics &amp; Gynecology"/);
-  assert.match(d, /<title>Obstetrics &amp; Gynecology<\/title>/);
+    tip: { label: "Obstetrics & Gynecology", value: "+124.0% premium",
+           note: "11 providers" } });
+  assert.match(d, /data-tip-label="Obstetrics &amp; Gynecology"/);
+  assert.match(d, /data-tip-value="\+124.0% premium"/);
+  assert.match(d, /data-tip-note="11 providers"/);
+  assert.match(d, /<title>Obstetrics &amp; Gynecology \u00b7 \+124.0% premium \u00b7 11 providers<\/title>/);
+});
+
+test("a tip may omit note, and <title> then composes only what exists", () => {
+  // Joining blindly would leave a dangling separator -- "NY \u00b7 $1 \u00b7 " reads as a
+  // truncated sentence, which is worse than the shorter true one.
+  const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff",
+    tip: { label: "NY", value: "$205.9M" } });
+  assert.match(d, /<title>NY \u00b7 \$205.9M<\/title>/);
+  assert.ok(!d.includes("data-tip-note"), "an absent note must emit no attribute");
+});
+
+test("a bare string tip degrades to a value rather than rendering [object Object]", () => {
+  /* Every call site passes parts. If one is ever missed, the reader should see the
+     text, not a stringified object -- this page swallows render throws into a
+     console.warn, so a loud failure would not be loud. */
+  const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff", tip: "plain" });
+  assert.match(d, /data-tip-value="plain"/);
+  assert.match(d, /<title>plain<\/title>/);
+  assert.ok(!d.includes("object Object"));
 });
 
 test("an absent, null or empty tip emits no attributes at all", () => {
   // An empty <title> is an empty announcement, which is worse than none.
   for (const tip of [undefined, null, ""]) {
     const d = S.dot(1, 2, 3, { filled: true, series: "#000", sheet: "#fff", tip });
-    assert.ok(!d.includes("data-tip"), `tip=${JSON.stringify(tip)} produced data-tip`);
+    assert.ok(!d.includes("data-tip"), `tip=${JSON.stringify(tip)} produced a data-tip attr`);
     assert.ok(!d.includes("<title>"), `tip=${JSON.stringify(tip)} produced a <title>`);
   }
 });
@@ -214,13 +238,14 @@ test("bubble keeps an explicit stroke, which is its compliance mechanism", () =>
 });
 
 test("bubble and dumbbell carry their tip the same way dot does", () => {
-  const b = S.bubble(1, 2, 3, { fill: "#000", stroke: "#000", tip: "B & C" });
-  assert.match(b, /data-tip="B &amp; C"/);
-  assert.match(b, /<title>B &amp; C<\/title>/);
-  const d = S.dumbbell(1, 9, 5,
-    { series: "#000", sheet: "#fff", whisker: "#888", tip: "D & E" });
-  assert.match(d, /data-tip="D &amp; E"/);
-  assert.match(d, /<title>D &amp; E<\/title>/);
+  const b = S.bubble(1, 2, 3, { fill: "#000", stroke: "#000",
+    tip: { label: "B & C", value: "$1" } });
+  assert.match(b, /data-tip-label="B &amp; C"/);
+  assert.match(b, /<title>B &amp; C \u00b7 \$1<\/title>/);
+  const d = S.dumbbell(1, 9, 5, { series: "#000", sheet: "#fff", whisker: "#888",
+    tip: { label: "D & E", value: "2 vs 3" } });
+  assert.match(d, /data-tip-label="D &amp; E"/);
+  assert.match(d, /<title>D &amp; E \u00b7 2 vs 3<\/title>/);
 });
 
 test("every mark rounds its coordinates and honours its size options", () => {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Explore — Medicare Reimbursement Gap</title>
 <meta name="description" content="Query 9.66M rows of CMS Medicare physician claims in your browser.">
-<link rel="stylesheet" href="css/dash.css?v=5c436ae6">
+<link rel="stylesheet" href="css/dash.css?v=9b9e3f48">
 </head>
 <body>
 <div class="wrap">
@@ -18,25 +18,6 @@
     <p class="prov"><a href="index.html">← Back to the findings</a></p>
   </div>
 </header>
-
-<section class="plate">
-  <div class="eyebrow"><span class="n">Pivot</span> Build your own breakdown</div>
-  <div class="filters">
-    <div class="f"><label for="pRows">Rows</label><select id="pRows"></select></div>
-    <div class="f"><label for="pCols">Columns</label><select id="pCols"></select></div>
-    <div class="f"><label for="pMeasure">Measure</label><select id="pMeasure"></select></div>
-    <div class="f"><label for="pFilterDim">Filter</label><select id="pFilterDim"></select></div>
-    <div class="f"><label for="pFilterVal">is</label>
-      <select id="pFilterVal"><option value="all">(all)</option></select></div>
-    <div class="f"><label>&nbsp;</label><button class="toggle" id="pRun" type="button">Run</button></div>
-    <p class="hint" id="pStatus">Loading the query engine…</p>
-  </div>
-  <div class="chartbox tall" id="pChart"></div>
-  <div class="tblwrap"><table id="pTable"></table></div>
-  <p class="read">Counts shown are cube rows at the selected grain, not distinct providers —
-    arbitrary grains cannot be precomputed. Load the provider table for exact provider counts.</p>
-  <div class="pcap"><span>Pl. VII &middot; Pivot over the published cube &middot; Unit: cube row</span><span class="src">Source <code>cube_dims.parquet</code> &middot; <code>pipeline/build_explorer_data.py</code></span></div>
-</section>
 
 <section class="plate">
   <div class="eyebrow"><span class="n">SQL</span> Ask your own question</div>
@@ -56,7 +37,26 @@
   </div>
   <div class="filters" id="sqlExamples"></div>
   <div class="tblwrap"><table id="sqlTable"></table></div>
-  <div class="pcap"><span>Pl. VIII &middot; Direct SQL over the cube &middot; Unit: cube row</span><span class="src">Source <code>cube_full.parquet</code> + <code>providers.parquet</code> &middot; <code>pipeline/build_explorer_data.py</code></span></div>
+  <div class="pcap"><span>Pl. VII &middot; Direct SQL over the cube &middot; Unit: cube row</span><span class="src">Source <code>cube_full.parquet</code> + <code>providers.parquet</code> &middot; <code>pipeline/build_explorer_data.py</code></span></div>
+</section>
+
+<section class="plate">
+  <div class="eyebrow"><span class="n">Pivot</span> Build your own breakdown</div>
+  <div class="filters">
+    <div class="f"><label for="pRows">Rows</label><select id="pRows"></select></div>
+    <div class="f"><label for="pCols">Columns</label><select id="pCols"></select></div>
+    <div class="f"><label for="pMeasure">Measure</label><select id="pMeasure"></select></div>
+    <div class="f"><label for="pFilterDim">Filter</label><select id="pFilterDim"></select></div>
+    <div class="f"><label for="pFilterVal">is</label>
+      <select id="pFilterVal"><option value="all">(all)</option></select></div>
+    <div class="f"><label>&nbsp;</label><button class="toggle" id="pRun" type="button">Run</button></div>
+    <p class="hint" id="pStatus">Loading the query engine…</p>
+  </div>
+  <div class="chartbox tall" id="pChart"></div>
+  <div class="tblwrap"><table id="pTable"></table></div>
+  <p class="read">Counts shown are cube rows at the selected grain, not distinct providers —
+    arbitrary grains cannot be precomputed. Load the provider table for exact provider counts.</p>
+  <div class="pcap"><span>Pl. VIII &middot; Pivot over the published cube &middot; Unit: cube row</span><span class="src">Source <code>cube_dims.parquet</code> &middot; <code>pipeline/build_explorer_data.py</code></span></div>
 </section>
 
 </div>
@@ -64,7 +64,8 @@
 <script src="js/charts.js?v=fdc6692b"></script>
 <script src="js/engine.js?v=fc322508"></script>
 <script src="js/permalink.js?v=d30e8b24"></script>
-<script src="js/svg.js?v=7f820ee2"></script>
-<script src="js/explore.js?v=e4713f5d"></script>
+<script src="js/svg.js?v=249f6e59"></script>
+<script src="js/explore.js?v=049f003c"></script>
+<script src="js/tip.js?v=528b5b98"></script>
 </body>
 </html>

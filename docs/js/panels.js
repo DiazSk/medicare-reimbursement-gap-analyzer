@@ -147,14 +147,20 @@
       const fade = dim ? ' opacity=".35"' : "";
 
       if (v === null) {
-        shapes.push(`<path d="${d}" fill="url(#h1nodata)" ${edge}${fade}>`
-          + `<title>${esc(st)} · no data for this filter</title></path>`);
+        const t = V().tipParts({ label: st, value: "No data for this filter" });
+        shapes.push(`<path d="${d}" fill="url(#h1nodata)" ${edge}${fade}${t.attr}>`
+          + `${t.child}</path>`);
         continue;
       }
       const b = binOf(v, bound), up = v >= 0;
-      shapes.push(`<path d="${d}" fill="${up ? ramp[b] : `url(#h1rule${b})`}" ${edge}${fade}>`
-        + `<title>${esc(st)} · ${esc(money(v, 2))} per beneficiary-proxy · `
-        + `${up ? "above" : "below"} standard</title></path>`);
+      // Same three parts as every other mark, so one hover layer serves the map too.
+      const t = V().tipParts({
+        label: st,
+        value: `${money(v, 2)} per beneficiary-proxy`,
+        note: `${up ? "Above" : "Below"} the standardized amount`,
+      });
+      shapes.push(`<path d="${d}" fill="${up ? ramp[b] : `url(#h1rule${b})`}" ${edge}${fade}`
+        + `${t.attr}>${t.child}</path>`);
 
       if (!labelled.has(st) || !box || dim) continue;
       if (box.w > 24 && box.h > 14) {
@@ -189,7 +195,13 @@
     host.innerHTML = `<svg viewBox="${VIEWBOX}" role="img" aria-label="Geographic premium `
       + `per beneficiary-proxy by state. Solid fill is above the standardized amount, `
       + `ruled fill is below.">`
-      + `<defs>${defs}</defs>${shapes.join("")}${labels.join("")}</svg>`;
+      /* The labels and callout leaders are drawn over the states, so without
+         pointer-events="none" a label swallows the hover for the very state it
+         names -- elementFromPoint returns the <text>, which is a sibling of the
+         <path> and carries no tip, so closest() finds nothing and the map reads as
+         having no data exactly where it is most legible. */
+      + `<defs>${defs}</defs>${shapes.join("")}`
+      + `<g pointer-events="none">${labels.join("")}</g></svg>`;
   }
 
   /* Eight keys plus a conditional ninth. The no-data key appears ONLY when a no-data
@@ -251,8 +263,8 @@
       signed: true,
       axisTitle: "Geographic premium (paid − standardized)",
       aria: "Largest net senders and receivers of geographic premium, by state",
-      tip: (r) => `${r.state} · ${money(r.premium)} premium · `
-        + `${money(r.pymt)} total Medicare paid`,
+      tip: (r) => ({ label: r.state, value: `${money(r.premium)} premium`,
+                     note: `${money(r.pymt)} total Medicare paid` }),
     });
 
     document.getElementById("h1read").textContent = hero1Read(sorted);
@@ -354,10 +366,12 @@
       highlight: (d) => !!hi && d.specialty === hi,
       axisTitle: "Non-participating exposure vs. participating",
       aria: "Non-participating patient exposure by specialty",
-      tip: (d) => `${d.specialty} · ${pct(d.premium_pct)} `
-        + `${d.premium_pct < 0 ? "lower" : "higher"} patient exposure · `
-        + `participating ${money(d.exp_y)}/beneficiary (${count(d.n_y)} providers) · `
-        + `non-participating ${money(d.exp_n)}/beneficiary (${count(d.n_n)} providers)`,
+      tip: (d) => ({
+        label: d.specialty,
+        value: `${pct(d.premium_pct)} ${d.premium_pct < 0 ? "lower" : "higher"} patient exposure`,
+        note: `participating ${money(d.exp_y)}/beneficiary (${count(d.n_y)} providers) · `
+          + `non-participating ${money(d.exp_n)}/beneficiary (${count(d.n_n)} providers)`,
+      }),
     });
 
     // The denominators ARE the story, so they get their own chart rather than a
@@ -373,8 +387,8 @@
       fmt: (v) => count(v),
       axisTitle: "Distinct providers",
       aria: "Participating and non-participating provider counts by specialty",
-      tip: (d) => `${d.specialty} · ${count(d.n_y)} participating · `
-        + `${count(d.n_n)} non-participating`,
+      tip: (d) => ({ label: d.specialty, value: `${count(d.n_y)} participating`,
+                     note: `${count(d.n_n)} non-participating` }),
       legend: ["Participating providers", "Non-participating providers"],
     }, "dumbbellPlot");
 
@@ -462,6 +476,28 @@
       body += S.pathLine([[x(0), y(0)], [x(1), y(1)]],
         { stroke: t.muted, width: 1, dash: "5 4" });
       body += S.pathLine(curve, { stroke: t.series, width: 2.2 });
+      /* The curve is one <path>, so there is nothing per-datum to hover. These are
+         invisible hit targets: no fill, no stroke, pointer-events="all" to stay
+         hit-testable anyway. Subsampled to ~24 of the payload's 200 points -- at this
+         width that is a target every ~22px, close enough to feel continuous without
+         200 extra nodes in the DOM.
+
+         Held back and appended LAST, after the axis and its labels. Drawn in place
+         here they sat under the axis line, and the three targets nearest the origin
+         -- where the curve is flattest and the "bottom 9% hold 0%" reading is the
+         whole point of the chart -- were unhoverable. Hit targets go on top of
+         everything, not just the mark they belong to. */
+      const step = Math.max(1, Math.ceil(pts.length / 24));
+      let hits = "";
+      for (let i = 0; i < pts.length; i += step) {
+        const p = pts[i];
+        const tp = S.tipParts({
+          label: `Bottom ${pct(p.x, 0)} of providers`,
+          value: `${pct(p.y, 0)} of drug spend`,
+        });
+        hits += `<circle cx="${x(p.x).toFixed(2)}" cy="${y(p.y).toFixed(2)}" r="11" `
+          + `fill="none" pointer-events="all"${tp.attr}>${tp.child}</circle>`;
+      }
       body += S.axisBottom(x, H - padB, (v) => pct(v, 0),
         { axis: t.axis, muted: t.muted });
       for (const tick of S.niceTicks(0, 1, 5)) {
@@ -470,6 +506,7 @@
       }
       body += `<text x="${padL}" y="${H - 6}" font-size="10.5" fill="${t.muted}">`
         + `Share of drug-billing providers, poorest to richest</text>`;
+      body += hits;   // topmost, so nothing drawn above can swallow a hover
       host.innerHTML =
         `<h3 class="figtitle">Lorenz curve — Gini ${view.kpi.gini}</h3>`
         + `<div class="legend"><span class="lk">`
@@ -489,7 +526,8 @@
       fmtValue: (v) => money(v),
       axisTitle: "Medicare payment",
       aria: "Largest drug codes by Medicare payment",
-      tip: (d) => `${d.hcpcs} · ${money(d.pymt)} · ${count(d.providers)} providers`,
+      tip: (d) => ({ label: d.hcpcs, value: money(d.pymt),
+                     note: `${count(d.providers)} providers` }),
     });
 
     document.getElementById("h3read").textContent = hero3Read(view);
@@ -655,8 +693,9 @@
         body += S.bubble(x(d.o_pymt), y(d.f_pymt),
           4 + 14 * Math.sqrt((d.f_svcs || 0) / maxV),
           { fill: t.series + "b0", stroke: t.series,
-            tip: `${d.hcpcs} · facility ${money(d.f_pymt)} · `
-              + `office ${money(d.o_pymt)} · ${count(d.f_svcs)} facility services` });
+            tip: { label: d.hcpcs,
+                   value: `facility ${money(d.f_pymt)} · office ${money(d.o_pymt)}`,
+                   note: `${count(d.f_svcs)} facility services` } });
       }
       body += S.axisBottom(x, H - padB, moneyTick,
         { axis: t.axis, muted: t.muted });
@@ -686,9 +725,12 @@
       signed: true,
       axisTitle: "Facility premium (negative = office pays more)",
       aria: "Largest site-of-service differentials in both directions",
-      tip: (d) => `${d.hcpcs} · `
-        + `${(d.savings || 0) >= 0 ? "facility costs more" : "office costs more"} `
-        + `${money(Math.abs(d.savings || 0))} · ${d.desc}`,
+      tip: (d) => ({
+        label: d.hcpcs,
+        value: `${(d.savings || 0) >= 0 ? "facility costs more" : "office costs more"} `
+          + `${money(Math.abs(d.savings || 0))}`,
+        note: d.desc,
+      }),
     });
 
     document.getElementById("h5read").textContent =

@@ -121,12 +121,29 @@
   // keeps the markup diffable when a renderer is changed.
   const n2 = (v) => (Math.round(v * 100) / 100).toString();
 
-  // data-tip drives the one shared hover tip; <title> is the screen-reader and
-  // touch fallback. Both or neither -- an empty <title> is an empty announcement.
+  /* A tip is { label, value, note } -- the entity, the number, and the cohort it
+     rests on. tip.js reads the three attributes separately so it can set the label
+     in grey mono above a bold value; <title> gets them joined, because a screen
+     reader announces an element's title as one utterance and three sibling
+     attributes would announce as nothing. Both or neither: an empty <title> is an
+     empty announcement.
+
+     A bare string is accepted as a value-only tip. Every call site passes parts, but
+     a missed one should render its text rather than "[object Object]" -- index.html
+     swallows render throws into a console.warn, so a loud failure here would not
+     actually be loud. */
+  const TIP_KEYS = ["label", "value", "note"];
+
   function tipParts(tip) {
     if (tip === null || tip === undefined || tip === "") return { attr: "", child: "" };
-    const t = esc(tip);
-    return { attr: ` data-tip="${t}"`, child: `<title>${t}</title>` };
+    const p = typeof tip === "string" ? { value: tip } : tip;
+    const present = TIP_KEYS.filter((k) => p[k] !== null && p[k] !== undefined && p[k] !== "");
+    if (!present.length) return { attr: "", child: "" };
+    return {
+      attr: present.map((k) => ` data-tip-${k}="${esc(p[k])}"`).join(""),
+      // Only the parts that exist, so there is never a dangling separator.
+      child: `<title>${present.map((k) => esc(p[k])).join(" · ")}</title>`,
+    };
   }
 
   function rule(x1, x2, y, o) {
@@ -416,8 +433,11 @@
   }
 
   root.MD = root.MD || {};
+  /* tipParts is exported for marks this module does not draw -- the choropleth
+     builds its own <path> per state, and it should carry the same attributes as
+     every dot and bubble rather than hand-rolling a second tooltip format. */
   root.MD.svg = { esc, scaleLinear, scaleLog, scaleBand, niceTicks,
-                  rule, dot, dumbbell, pathLine, bubble,
+                  rule, dot, dumbbell, pathLine, bubble, tipParts,
                   axisBottom, axisLeft, labelWidth, zeroRule, frame,
                   dotPlot, dumbbellPlot };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -44,27 +44,26 @@
      properties JS never reads. */
   :root {
     color-scheme: light;
-    --surface-1: #fcfcfb;
-    --plane: #f9f9f7;
-    --ink-1: #0b0b0b;
-    --ink-2: #52514e;
-    --ink-muted: #898781;
-    --grid: #e1e0d9;
-    --axis: #c3c2b7;
-    --border: rgba(11, 11, 11, 0.10);
+    --surface-1: #f5f4f6;
+    --plane: #f5f4f6;
+    --ink-1: #16181a;
+    --ink-2: #4f5156;
+    --ink-muted: #6b6d72;
+    --grid: #c9c7c4;
+    --axis: #c9c7c4;
+    --border: #c9c7c4;
     --series-1: #2a78d6;
     --series-2: #eb6834;
     --series-3: #1baf7a;
     --series-4: #eda100;
-    --success: #006300;
-    --critical: #d03b3b;
+    --critical: #a3322b;
     /* diverging: blue <-> red, gray midpoint (never a rainbow) */
     --div-neg2: #184f95;
     --div-neg1: #6da7ec;
     --div-mid:  #f0efec;
     --div-pos1: #e87272;
     --div-pos2: #b02525;
-    --radius: 10px;
+    --radius: 0;
     --gap: 18px;
     /* charts.js:readTokens() reads --font-sans into Chart.defaults.font.family. */
     --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -105,13 +104,13 @@
   .filters .f { display: flex; flex-direction: column; gap: 5px; }
   .filters label { font-size: 12px; color: var(--ink-2); font-weight: 550; }
   select { background: var(--plane); color: var(--ink-1); font: inherit; font-size: 14px;
-    border: 1px solid var(--axis); border-radius: 7px; padding: 7px 10px; min-width: 165px; }
+    border: 1px solid var(--ink-muted); border-radius: var(--radius); padding: 7px 10px; min-width: 165px; }
   .filters .hint { color: var(--ink-muted); font-size: 12px; margin-left: auto;
     max-width: 44ch; text-align: right; }
   .filters .note { color: var(--ink-muted); font-size: 12px; max-width: 30ch; }
   .filters .f.wide { flex: 1 1 100%; }
   .sqlbox { width: 100%; font: 13px var(--font-mono); background: var(--plane);
-    color: var(--ink-1); border: 1px solid var(--axis); border-radius: 7px; padding: 10px; }
+    color: var(--ink-1); border: 1px solid var(--ink-muted); border-radius: var(--radius); padding: 10px; }
 
   /* cards */
   .card { background: var(--surface-1); border: 1px solid var(--border);
@@ -159,7 +158,7 @@
   .pager { display: flex; gap: 12px; align-items: center; justify-content: flex-end;
     margin-top: 12px; font-size: 13px; color: var(--ink-2); }
   .pager button { background: var(--plane); color: var(--ink-1); cursor: pointer;
-    border: 1px solid var(--axis); border-radius: 6px; padding: 5px 11px; font: inherit; }
+    border: 1px solid var(--ink-muted); border-radius: var(--radius); padding: 5px 11px; font: inherit; }
   .pager button[disabled] { opacity: 0.4; cursor: default; }
   .empty { color: var(--ink-muted); padding: 24px 0; text-align: center; font-size: 13.5px; }
 
@@ -187,7 +186,7 @@
   .badge-reliability { font-size: 11px; letter-spacing: 0.03em; padding: 2px 8px;
     border-radius: 100px; border: 1px solid var(--border); background: var(--plane);
     color: var(--ink-2); white-space: nowrap; }
-  .badge-reliability[data-reliability="thin"] { color: var(--series-2);
-    border-color: var(--series-2); }
+  .badge-reliability[data-reliability="thin"] { color: var(--critical);
+    border-color: var(--critical); }
   .badge-reliability[data-reliability="very-thin"] { color: var(--critical);
     border-color: var(--critical); }

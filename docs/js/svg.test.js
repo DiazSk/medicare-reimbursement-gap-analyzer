@@ -236,3 +236,77 @@ test("every mark rounds its coordinates and honours its size options", () => {
   assert.match(S.pathLine([[0, 0], [1, 1]], { stroke: "#000", width: 2.5 }),
     /stroke-width="2.5"/);
 });
+
+test("axisBottom labels every tick the scale reaches", () => {
+  const x = S.scaleLinear([0, 100], [0, 400]);
+  const a = S.axisBottom(x, 200, (v) => v + "%", { axis: "#c9c7c4", muted: "#6b6d72" });
+  for (const t of [0, 50, 100]) {
+    assert.ok(a.includes(">" + t + "%<"), `tick ${t} missing from the axis`);
+  }
+});
+
+test("axisBottom draws no label outside the drawing area", () => {
+  // The regression guard for the old Chart.js bug in its new form: an axis that
+  // silently draws nothing, or draws past its own edge.
+  const x = S.scaleLinear([0, 100], [0, 400]);
+  const a = S.axisBottom(x, 200, (v) => String(v), { axis: "#c9c7c4", muted: "#6b6d72" });
+  const xs = [...a.matchAll(/<text x="(-?[\d.]+)"/g)].map((m) => Number(m[1]));
+  assert.ok(xs.length >= 2, `expected at least 2 tick labels, got ${xs.length}`);
+  assert.ok(xs.every((v) => v >= -1 && v <= 401), `labels outside [0,400]: ${xs}`);
+});
+
+test("zeroRule draws when the domain spans zero", () => {
+  const x = S.scaleLinear([-50, 100], [0, 300]);
+  const z = S.zeroRule(x, 0, 200, { ink: "#16181a" });
+  assert.match(z, /<line/);
+  assert.match(z, /stroke="#16181a"/);
+});
+
+test("zeroRule draws NOTHING when zero is outside the domain", () => {
+  // Review Focus 3. An all-positive filter has no zero to mark. Clamping the rule
+  // to the axis edge would draw a datum line where no datum exists.
+  const pos = S.scaleLinear([10, 100], [0, 300]);
+  assert.equal(S.zeroRule(pos, 0, 200, { ink: "#16181a" }), "");
+  const neg = S.scaleLinear([-100, -10], [0, 300]);
+  assert.equal(S.zeroRule(neg, 0, 200, { ink: "#16181a" }), "");
+});
+
+test("labelWidth reserves room from the LONGEST label", () => {
+  // Review Focus 4. "Physical Therapist in Private Practice" is 38 characters; a
+  // gutter sized from the first label clips it and the clipping is silent.
+  const narrow = S.labelWidth(["AK", "CA"], 10.5);
+  const wide = S.labelWidth(["AK", "Physical Therapist in Private Practice"], 10.5);
+  assert.ok(wide > narrow * 3, `expected the long label to dominate: ${narrow} vs ${wide}`);
+});
+
+test("axisLeft escapes free-text category labels", () => {
+  const band = S.scaleBand(["Obstetrics & Gynecology"], [0, 100], 0);
+  const a = S.axisLeft(["Obstetrics & Gynecology"], band, 120, { muted: "#6b6d72" });
+  assert.match(a, /Obstetrics &amp; Gynecology/);
+  assert.ok(!/Obstetrics & Gyn/.test(a), "a raw ampersand would stop the parser");
+});
+
+test("axisLeft can emphasise one label without restyling the rest", () => {
+  // Hero 2's selected specialty goes to full ink; everything else stays secondary.
+  const labels = ["a", "b"];
+  const band = S.scaleBand(labels, [0, 100], 0);
+  const a = S.axisLeft(labels, band, 50, {
+    muted: "#6b6d72", ink: "#16181a", emphasis: (l) => l === "b",
+  });
+  assert.match(a, /fill="#16181a"/);
+  assert.match(a, /fill="#6b6d72"/);
+});
+
+test("frame wraps a viewBox with a role and an aria-label", () => {
+  const f = S.frame(400, 200, "<circle/>", { aria: "Payments by drug code" });
+  assert.match(f, /viewBox="0 0 400 200"/);
+  assert.match(f, /role="img"/);
+  assert.match(f, /aria-label="Payments by drug code"/);
+  assert.match(f, /<circle\/>/);
+});
+
+test("frame returns an empty string for an empty body", () => {
+  // Review Focus 1: a zero-row cohort must not produce a labelled empty frame
+  // that reads as "no data here" when the honest answer belongs in prose.
+  assert.equal(S.frame(400, 200, "", { aria: "x" }), "");
+});

@@ -173,7 +173,73 @@
       + `stroke="${o.stroke}" stroke-width="1"${t.attr}>${t.child}</circle>`;
   }
 
+  /* ── chrome ─────────────────────────────────────────────────────────────── */
+
+  /* Geist Mono at its default width. 0.62em is measured, not guessed: the mono
+     face is monospaced, so one ratio covers every string, and the gutter has to be
+     sized from the LONGEST label or the longest one clips silently. */
+  const MONO_RATIO = 0.62;
+  function labelWidth(labels, px) {
+    let max = 0;
+    for (const l of labels) max = Math.max(max, String(l === null ? "" : l).length);
+    return Math.ceil(max * px * MONO_RATIO);
+  }
+
+  function axisBottom(scale, y, fmt, o) {
+    const ticks = scale.ticks ? scale.ticks(5) : [];
+    const r0 = scale.range[0], r1 = scale.range[1];
+    let out = rule(r0, r1, y, { stroke: o.axis, width: 1 });
+    for (const t of ticks) {
+      const x = scale(t);
+      if (x < r0 - 1 || x > r1 + 1) continue;   // never label off the drawing
+      if (o.grid && o.top != null) {
+        // Emitted directly rather than by rewriting a horizontal rule's y2: a
+        // string-replace on generated markup breaks the moment rule() changes.
+        out += `<line x1="${n2(x)}" y1="${n2(y)}" x2="${n2(x)}" `
+          + `y2="${n2(o.top)}" stroke="${o.grid}" stroke-width="1"/>`;
+      }
+      out += `<text x="${n2(x)}" y="${n2(y + 14)}" text-anchor="middle" `
+        + `font-size="10.5" fill="${o.muted}">${esc(fmt ? fmt(t) : t)}</text>`;
+    }
+    return out;
+  }
+
+  function axisLeft(labels, band, x, o) {
+    const size = o.size == null ? 10.5 : o.size;
+    let out = "";
+    for (const l of labels) {
+      const emph = o.emphasis ? !!o.emphasis(l) : false;
+      out += `<text x="${n2(x)}" y="${n2(band(l) + size / 3)}" text-anchor="end" `
+        + `font-size="${size}"`
+        + (o.family ? ` font-family="${o.family}"` : "")
+        + ` fill="${emph && o.ink ? o.ink : o.muted}">${esc(l)}</text>`;
+    }
+    return out;
+  }
+
+  /* Only where zero is actually in the domain. An all-positive cohort has no zero
+     to mark, and a rule clamped to the axis edge draws a datum that is not there. */
+  function zeroRule(scale, yTop, yBottom, o) {
+    const d0 = Math.min(scale.domain[0], scale.domain[1]);
+    const d1 = Math.max(scale.domain[0], scale.domain[1]);
+    if (d0 > 0 || d1 < 0) return "";
+    const x = scale(0);
+    return `<line x1="${n2(x)}" y1="${n2(yTop)}" x2="${n2(x)}" y2="${n2(yBottom)}" `
+      + `stroke="${o.ink}" stroke-width="1"/>`;
+  }
+
+  // An empty body yields no <svg> at all: a labelled empty frame reads as a
+  // chart that found nothing, and the honest version of that belongs in prose.
+  function frame(w, h, body, o) {
+    if (!body) return "";
+    return `<svg viewBox="0 0 ${n2(w)} ${n2(h)}" role="img" `
+      + `aria-label="${esc(o.aria)}" preserveAspectRatio="xMidYMid meet">`
+      + (o.defs ? `<defs>${o.defs}</defs>` : "")
+      + body + `</svg>`;
+  }
+
   root.MD = root.MD || {};
   root.MD.svg = { esc, scaleLinear, scaleLog, scaleBand, niceTicks,
-                  rule, dot, dumbbell, pathLine, bubble };
+                  rule, dot, dumbbell, pathLine, bubble,
+                  axisBottom, axisLeft, labelWidth, zeroRule, frame };
 })(typeof window !== "undefined" ? window : globalThis);

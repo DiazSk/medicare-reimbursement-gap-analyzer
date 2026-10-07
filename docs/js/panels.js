@@ -583,6 +583,7 @@
           label: (d) => d.hcpcs,
           value: (d) => d.pymt,
           fmt: (v) => money(v, 0),
+          fmtValue: (v) => money(v),
           axisTitle: "Medicare payment",
           aria: "Largest drug codes by Medicare payment",
           tip: (d) => `${d.hcpcs} · ${money(d.pymt)} · ${count(d.providers)} providers`,

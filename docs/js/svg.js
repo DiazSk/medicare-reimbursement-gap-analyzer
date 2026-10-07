@@ -264,6 +264,11 @@
                        : scaleLinear([lo, hi], [x0, x1]);
     const band = scaleBand(labels, [padT, padT + rows.length * rowH], 0);
 
+    // The axis wants brevity; this column wants precision. money(v, 0) renders both
+    // $2.35B and $1.86B as "$2B", and the dot's position already carries magnitude --
+    // this text is the only place the exact figure appears on the chart.
+    const fmtValue = spec.fmtValue || spec.fmt;
+
     let body = "";
 
     /* The selection band is drawn FIRST, so it sits behind every mark -- a band
@@ -290,7 +295,7 @@
       body += dot(x(v), y, 4.5,
         { filled, series: t.series, sheet: t.sheet, tip: spec.tip(r) });
       body += `<text x="${W - valW + 8}" y="${y + 3.5}" font-size="10.5" `
-        + `fill="${t.ink2}">${esc(spec.fmt(v))}</text>`;
+        + `fill="${t.ink2}">${esc(fmtValue(v))}</text>`;
     }
 
     if (spec.signed) {

@@ -430,3 +430,26 @@ test("dotPlot clamps a zero or absurd width instead of collapsing", () => {
     assert.ok(!out.includes("NaN"), `width=${width} leaked NaN`);
   }
 });
+
+test("dotPlot's value column can be more precise than its axis ticks", () => {
+  // money(v, 0) renders 2.35e9 and 1.86e9 both as "$2B". The dot's position carries
+  // magnitude; this column is the only place the exact figure appears, so it must be
+  // able to disagree with the tick format.
+  const rows = [{ k: "a", v: 2354722302.4 }, { k: "b", v: 1860000000 }];
+  const out = S.dotPlot({
+    t: TK, rows, label: (r) => r.k, value: (r) => r.v,
+    fmt: (v) => "$" + Math.round(v / 1e9) + "B",
+    fmtValue: (v) => "$" + (v / 1e9).toFixed(2) + "B",
+    axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  assert.ok(out.includes(">$2.35B<"), "the precise value must appear");
+  assert.ok(out.includes(">$1.86B<"), "both rows must be distinguishable");
+});
+
+test("dotPlot falls back to fmt when no fmtValue is given", () => {
+  const out = S.dotPlot({
+    t: TK, rows: [{ k: "a", v: 5 }], label: (r) => r.k, value: (r) => r.v,
+    fmt: (v) => v + "u", axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  assert.ok(out.includes(">5u<"), "fmt must still drive the value column by default");
+});

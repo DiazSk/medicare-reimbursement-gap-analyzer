@@ -114,3 +114,54 @@ test("the payload stays on one unreflowed line", () => {
   assert.equal(long.length, 1, `expected 1 payload line, found ${long.length}`);
   assert.match(long[0], /^<script id="payload"/, "the long line must be the payload script tag");
 });
+
+test("every token declared on :root is consumed somewhere", () => {
+  // Dead token config is how a palette drifts out of sync with the page: a renamed
+  // token leaves its old declaration behind, still looking authoritative. This also
+  // catches the inverse of the `missing token` case -- a var() whose declaration was
+  // deleted resolves to nothing and the property silently falls back.
+  const root = css.slice(css.indexOf(":root {"), css.indexOf("* { box-sizing"));
+  const declared = [...root.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]);
+  assert.ok(declared.length > 15, `expected the full token block, found ${declared.length}`);
+
+  const all = [index, explore, css, js].join("\n");
+  for (const t of declared) {
+    assert.ok(all.includes(`var(${t})`) || all.includes(`css("${t}")`),
+      `token ${t} is declared on :root but nothing reads it`);
+  }
+});
+
+test("every token read by JS is declared", () => {
+  const read = [...js.matchAll(/css\("(--[a-z0-9-]+)"\)/g)].map((m) => m[1]);
+  assert.ok(read.length > 10, `expected the readTokens() set, found ${read.length}`);
+  for (const t of read) {
+    assert.match(css, new RegExp("\\" + t + "\\s*:"),
+      `charts.js reads ${t} but dash.css never declares it -- getPropertyValue returns ""`);
+  }
+});
+
+test("the colour tokens JS reads are 6-digit hex literals", () => {
+  // format.js's hex2rgb parses 3- or 6-digit hex only, and panels.js concatenates an
+  // alpha suffix onto --series as a string. An oklch(), rgb() or 8-digit value yields
+  // rgb(NaN,NaN,NaN), which throws inside renderHero1, which detach() swallows into a
+  // console.warn -- leaving the KPI ribbon rendered and every panel below it blank,
+  // with nothing on screen saying so.
+  const read = [...js.matchAll(/css\("(--[a-z0-9-]+)"\)/g)].map((m) => m[1])
+    .filter((t) => !t.startsWith("--font-"));
+  for (const t of read) {
+    const m = css.match(new RegExp("\\" + t + "\\s*:\\s*([^;]+);"));
+    assert.ok(m, `${t} is not declared`);
+    assert.match(m[1].trim(), /^#[0-9a-fA-F]{6}$/,
+      `${t} is "${m[1].trim()}" -- must stay a 6-digit hex literal or every panel below the KPI ribbon blanks silently`);
+  }
+});
+
+test("no `background` shorthand on .plate", () => {
+  // The four registration crosshairs are background-image LAYERS. The shorthand resets
+  // background-image, so one `background:` in any .plate rule wipes all four with no
+  // error -- which is why background-color is a longhand there.
+  for (const m of css.matchAll(/\.plate[^{]*\{([^}]*)\}/g)) {
+    assert.ok(!/(^|;)\s*background\s*:/.test(m[1]),
+      "a `background` shorthand in a .plate rule wipes the registration crosshairs; use longhands");
+  }
+});

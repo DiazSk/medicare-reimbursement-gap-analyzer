@@ -565,3 +565,35 @@ test("axisLeft emits no style attribute when no family is given", () => {
   const band = S.scaleBand(["a"], [0, 100], 0);
   assert.ok(!S.axisLeft(["a"], band, 50, { muted: "#000" }).includes("style="));
 });
+
+test("dumbbellPlot draws two dots and a connector per row", () => {
+  const rows = [{ k: "a", y: 1000, n: 10 }, { k: "b", y: 500, n: 5 }];
+  const out = S.dumbbellPlot({
+    t: TK, rows, label: (r) => r.k, a: (r) => r.y, b: (r) => r.n,
+    fmt: (v) => String(v), axisTitle: "Providers", aria: "test",
+    tip: (r) => r.k, legend: ["Participating", "Non-participating"],
+  });
+  assert.equal((out.match(/<circle/g) || []).length, 4, "two dots per row");
+  assert.match(out, /Participating/);
+});
+
+test("dumbbellPlot tolerates a zero cohort on the log axis", () => {
+  // n_n can legitimately be 0, and log(0) is -Infinity.
+  const out = S.dumbbellPlot({
+    t: TK, rows: [{ k: "a", y: 1000, n: 0 }],
+    label: (r) => r.k, a: (r) => r.y, b: (r) => r.n,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+    legend: ["A", "B"],
+  });
+  assert.ok(!out.includes("NaN"), `NaN leaked: ${out.slice(0, 200)}`);
+  assert.ok(!out.includes("Infinity"), `Infinity leaked: ${out.slice(0, 200)}`);
+});
+
+test("dumbbellPlot renders prose for a zero-row cohort", () => {
+  const out = S.dumbbellPlot({
+    t: TK, rows: [], label: (r) => r.k, a: (r) => r.y, b: (r) => r.n,
+    fmt: String, axisTitle: "x", aria: "y", tip: String, legend: ["A", "B"],
+  });
+  assert.ok(!out.includes("<svg"));
+  assert.match(out, /class="empty"/);
+});

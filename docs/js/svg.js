@@ -333,9 +333,56 @@
     return frame(W, H, body, { aria: spec.aria });
   }
 
+  /* Participating and non-participating are a genuine PAIR on one row, which is
+     what a dumbbell is for -- it reads as one comparison instead of two bars that
+     happen to be adjacent. Log axis: the two cohorts differ by three orders of
+     magnitude. */
+  function dumbbellPlot(spec) {
+    const t = spec.t;
+    const rows = spec.rows || [];
+    if (!rows.length) {
+      return `<p class="empty">No specialty in this filter has providers on both `
+        + `sides of the participation line, so there is no pair to compare.</p>`;
+    }
+    const rowH = 26, valW = 10;
+    // A detached or display:none host reports 0, which would collapse the drawing.
+    const W = Math.max(320, spec.width == null ? 760 : spec.width);
+    const labels = rows.map(spec.label);
+    const gutter = Math.min(220, labelWidth(labels, 10.5) + 14);
+    const padT = 8, padB = 34;
+    const H = padT + rows.length * rowH + padB;
+    const x0 = gutter, x1 = W - valW - 40;
+
+    const all = rows.flatMap((r) => [spec.a(r), spec.b(r)])
+      .filter((v) => Number.isFinite(v) && v > 0);
+    const x = scaleLog([1, Math.max(2, Math.max.apply(null, all))], [x0, x1]);
+    const band = scaleBand(labels, [padT, padT + rows.length * rowH], 0);
+
+    let body = "";
+    for (const [i, r] of rows.entries()) {
+      const y = band(spec.label(r), i);
+      body += rule(x0, x1, y, { stroke: t.hair });
+      body += dumbbell(x(spec.a(r)), x(spec.b(r)), y,
+        { series: t.series, sheet: t.sheet, whisker: t.whisker, tip: spec.tip(r) });
+    }
+    body += axisLeft(labels, band, gutter - 10,
+      { muted: t.ink2, family: t.sans });
+    body += axisBottom(x, padT + rows.length * rowH + 6, spec.fmt,
+      { axis: t.axis, muted: t.muted });
+    body += `<text x="${x0}" y="${H - 4}" font-size="10.5" fill="${t.muted}">`
+      + `${esc(spec.axisTitle)}</text>`;
+
+    const legend = `<div class="legend"><span class="lk">`
+      + `<i style="background:${t.series}"></i>${esc(spec.legend[0])}</span>`
+      + `<span class="lk"><i style="background:${t.whisker}"></i>`
+      + `${esc(spec.legend[1])}</span></div>`;
+
+    return legend + frame(W, H, body, { aria: spec.aria });
+  }
+
   root.MD = root.MD || {};
   root.MD.svg = { esc, scaleLinear, scaleLog, scaleBand, niceTicks,
                   rule, dot, dumbbell, pathLine, bubble,
                   axisBottom, axisLeft, labelWidth, zeroRule, frame,
-                  dotPlot };
+                  dotPlot, dumbbellPlot };
 })(typeof window !== "undefined" ? window : globalThis);

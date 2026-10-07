@@ -415,38 +415,19 @@
     // second axis. Log scale: the two cohorts differ by three orders of magnitude.
     const cohort = view.nonpar.slice()
       .sort((a, b) => (b.n_n || 0) - (a.n_n || 0)).slice(0, 12);
-    mount("cNonParAbs", {
-      type: "bar",
-      data: {
-        labels: cohort.map(d => d.specialty),
-        datasets: [
-          { label: "Participating providers", data: cohort.map(d => d.n_y),
-            // Two categories inside one hue: solid --series against a --whisker fill
-            // behind the same --series border, so the smaller cohort reads lighter
-            // without spending a second hue or dropping its outline below 4.03:1.
-            backgroundColor: T().series, borderColor: T().series, borderWidth: 1 },
-          { label: "Non-participating providers", data: cohort.map(d => d.n_n),
-            backgroundColor: T().whisker, borderColor: T().series, borderWidth: 1 },
-        ],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(true),
-                    title: { text: "Why the ratios are fragile: cohort sizes (log scale)" },
-          tooltip: tooltipOpts({ label: c => ` ${c.dataset.label}: ${count(c.raw)}` }),
-        },
-        scales: {
-          x: axisOpts("Distinct providers", v => count(v),
-                      { type: "logarithmic", min: 1 }),
-          // Specialty names are content, not metadata, so this axis alone overrides the
-          // mono default. extra.ticks replaces ticks wholesale (charts.test.js pins
-          // that), which is why the family is set here rather than globally.
-          y: axisOpts(null, null, { grid: { display: false },
-               ticks: { color: T().ink2, font: { size: 10.5, family: T().sans } } }),
-        },
-      },
-    });
+    // The 4th argument selects the renderer; without it mountSvg would call dotPlot.
+    mountSvg("cNonParAbs", "Why the ratios are fragile: cohort sizes (log scale)", {
+      rows: cohort,
+      label: (d) => d.specialty,
+      a: (d) => d.n_y,
+      b: (d) => d.n_n,
+      fmt: (v) => count(v),
+      axisTitle: "Distinct providers",
+      aria: "Participating and non-participating provider counts by specialty",
+      tip: (d) => `${d.specialty} · ${count(d.n_y)} participating · `
+        + `${count(d.n_n)} non-participating`,
+      legend: ["Participating providers", "Non-participating providers"],
+    }, "dumbbellPlot");
 
     document.getElementById("h2read").textContent = hero2Read(view);
     document.getElementById("h2caveat").textContent = hero2Caveat(view);

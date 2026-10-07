@@ -254,6 +254,10 @@
      (still Chart.js until the later tasks convert them) keep their fixed height. */
   .chartbox { position: relative; height: 330px; }
   .chartbox:not(:has(canvas)) { height: auto; }
+  /* .chartbox.tall is (0,2,0) and beats :not(:has(canvas)) at (0,1,1), so the tall
+     variant needs its own opt-out or every tall SVG host stays letterboxed at 430px.
+     Both collapse into the plain rule once the last canvas goes. */
+  .chartbox.tall:not(:has(canvas)) { height: auto; }
   .chartbox > svg { width: 100%; height: auto; display: block; }
   .chartbox svg text { font-family: var(--font-mono); }
   .figtitle { font-size: 13px; font-weight: 600; margin: 0 0 8px;

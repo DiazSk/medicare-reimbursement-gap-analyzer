@@ -69,6 +69,17 @@
   // (Alaska). A "0 0 975 610" box clips it; this cost a rebuild to find.
   const VIEWBOX = "-60 12 1085 595";
   const V = () => root.MD.svg;
+
+  /* The SVG analogue of mount(). dotPlot cannot measure its own host -- svg.js is
+     deliberately DOM-free -- so the width is read here. Without it a caller silently
+     gets a 760-wide viewBox in a 526px box and 7.3px labels, which is the defect this
+     helper exists to make unrepeatable. */
+  function mountSvg(id, title, spec) {
+    const host = document.getElementById(id);
+    if (!host) return;
+    host.innerHTML = (title ? `<h3 class="figtitle">${V().esc(title)}</h3>` : "")
+      + V().dotPlot(Object.assign({ t: T(), width: host.clientWidth || 760 }, spec));
+  }
   // Callout labels for areas too small to hold one sit in a right margin at this x.
   const GUTTER_X = 952;
 
@@ -571,23 +582,16 @@
     });
 
     const j = view.jcodeTop.slice(0, 15);
-    const jcodeHost = document.getElementById("cJcode");
-    jcodeHost.innerHTML =
-      `<h3 class="figtitle">Largest drug codes by Medicare payment</h3>`
-      + V().dotPlot({
-          t: T(),
-          // The viewBox must match the rendered width or the whole SVG scales and the
-          // labels shrink with it -- 760 into a 526px box rendered them at 7.3px.
-          width: jcodeHost.clientWidth || 760,
-          rows: j,
-          label: (d) => d.hcpcs,
-          value: (d) => d.pymt,
-          fmt: (v) => money(v, 0),
-          fmtValue: (v) => money(v),
-          axisTitle: "Medicare payment",
-          aria: "Largest drug codes by Medicare payment",
-          tip: (d) => `${d.hcpcs} · ${money(d.pymt)} · ${count(d.providers)} providers`,
-        });
+    mountSvg("cJcode", "Largest drug codes by Medicare payment", {
+      rows: j,
+      label: (d) => d.hcpcs,
+      value: (d) => d.pymt,
+      fmt: (v) => money(v, 0),
+      fmtValue: (v) => money(v),
+      axisTitle: "Medicare payment",
+      aria: "Largest drug codes by Medicare payment",
+      tip: (d) => `${d.hcpcs} · ${money(d.pymt)} · ${count(d.providers)} providers`,
+    });
 
     document.getElementById("h3read").textContent = hero3Read(view);
   }
@@ -917,7 +921,7 @@
     TIER_LABELS, binOf, pathBox, rampInk,
     renderKpis: renderStatics,   // alias: the ribbon and header render together
     renderHero1, renderHero2, renderHero3, renderHero4, renderHero5,
-    renderProviders, renderStatics, geoByState,
+    renderProviders, renderStatics, geoByState, mountSvg,
     // Exported for docs/js/panels.test.js: these are the only DOM-free parts of
     // this module, and the 1- and 0-cohort prose is otherwise reachable only by a
     // human clicking through filters on a live page.

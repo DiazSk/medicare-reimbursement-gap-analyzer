@@ -371,6 +371,11 @@ test("dotPlot with signed:true draws a zero rule and hollows the negatives", () 
   });
   assert.match(out, /fill="#f5f4f6"/, "the negative row should be hollow");
   assert.match(out, /fill="#2a78d6"/, "the positive row should be filled");
+  // The zero rule IS the sign channel here; filled/hollow was freed for reliability
+  // only because position across this rule carries sign. Deleting it left every test
+  // green, which made the whole encoding deletable in silence.
+  assert.match(out, /<line[^>]*stroke="#16181a"[^>]*\/>/,
+    "a signed plot must draw its zero rule");
 });
 
 test("dotPlot's filled predicate overrides the sign default", () => {
@@ -444,6 +449,10 @@ test("dotPlot's value column can be more precise than its axis ticks", () => {
   });
   assert.ok(out.includes(">$2.35B<"), "the precise value must appear");
   assert.ok(out.includes(">$1.86B<"), "both rows must be distinguishable");
+  assert.ok(S.dotPlot({
+    t: TK, rows: [{ k: "a", v: 1 }], label: (r) => r.k, value: (r) => r.v,
+    fmt: String, fmtValue: () => "A & B", axisTitle: "x", aria: "y", tip: (r) => r.k,
+  }).includes("A &amp; B"), "the value column must escape its text");
 });
 
 test("dotPlot falls back to fmt when no fmtValue is given", () => {
@@ -479,4 +488,59 @@ test("axisBottom keeps the brief format when the ticks do not collide", () => {
   });
   assert.ok(a.includes(">100M<"), "a non-colliding axis keeps the brief format");
   assert.ok(!a.includes("100.00M"), "the precise format must not be used unnecessarily");
+});
+
+test("dotPlot gives duplicate labels their own rows", () => {
+  // scaleBand keys by label, so without an index the last duplicate wins and two dots
+  // stack on one hairline with a band left empty.
+  const rows = [{ k: "Internal Medicine", v: 10 },
+                { k: "Internal Medicine", v: 90 },
+                { k: "Other", v: 50 }];
+  const out = S.dotPlot({
+    t: TK, rows, label: (r) => r.k, value: (r) => r.v,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  const cys = [...out.matchAll(/<circle[^>]*cy="([\d.]+)"/g)].map((m) => m[1]);
+  assert.equal(cys.length, 3, "one dot per row");
+  assert.equal(new Set(cys).size, 3, `each row needs its own band, got cy=${cys}`);
+  const lys = [...out.matchAll(/<text[^>]*text-anchor="end"[^>]*>/g)]
+    .map((m) => m[0].match(/ y="([\d.]+)"/)[1]);
+  assert.equal(new Set(lys).size, 3, `axis labels must not stack either, got y=${lys}`);
+});
+
+test("dotPlot draws the highlight band behind the marks, not over them", () => {
+  const rows = [{ k: "a", v: 1 }, { k: "b", v: 2 }];
+  const out = S.dotPlot({
+    t: TK, rows, label: (r) => r.k, value: (r) => r.v,
+    highlight: (r) => r.k === "b",
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  const rect = out.indexOf("<rect");
+  const circle = out.indexOf("<circle");
+  assert.ok(rect >= 0, "the highlight band must be drawn");
+  assert.ok(rect < circle, "the band must precede the marks or it covers them");
+  assert.match(out, /<rect[^>]*fill="#dcddf3"/, "the band uses --seal");
+});
+
+test("dotPlot's log option spaces rows multiplicatively", () => {
+  const rows = [{ k: "a", v: 1 }, { k: "b", v: 10 }, { k: "c", v: 100 }];
+  const lin = S.dotPlot({ t: TK, rows, label: (r) => r.k, value: (r) => r.v,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k });
+  const log = S.dotPlot({ t: TK, rows, log: true, label: (r) => r.k, value: (r) => r.v,
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k });
+  const cx = (s) => [...s.matchAll(/<circle[^>]*cx="([\d.]+)"/g)].map((m) => Number(m[1]));
+  const [l1, l2, l3] = cx(lin), [g1, g2, g3] = cx(log);
+  assert.ok(l2 - l1 < l3 - l2, "a linear scale crowds the small values together");
+  assert.ok(Math.abs((g2 - g1) - (g3 - g2)) < 1, "a log scale spaces decades evenly");
+});
+
+test("dotPlot's emphasis raises only the matching row's label", () => {
+  const rows = [{ k: "a", v: 1 }, { k: "b", v: 2 }];
+  const out = S.dotPlot({
+    t: TK, rows, label: (r) => r.k, value: (r) => r.v,
+    emphasis: (l) => l === "b",
+    fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+  });
+  assert.match(out, /fill="#16181a">b</);
+  assert.match(out, /fill="#4f5156">a</);
 });

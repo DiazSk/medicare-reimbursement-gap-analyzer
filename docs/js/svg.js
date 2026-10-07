@@ -69,11 +69,14 @@
     const r0 = range[0], r1 = range[1];
     const step = (r1 - r0) / n;
     const idx = new Map(labels.map((l, i) => [l, i]));
-    const f = (label) => {
-      const i = idx.get(label);
+    const f = (label, i) => {
+      // An explicit index wins, so duplicate labels no longer collapse onto one band.
+      // Callers that have a row index should pass it; the label lookup stays for
+      // callers that only have the string.
+      const k = (typeof i === "number" && i >= 0 && i < labels.length) ? i : idx.get(label);
       // An unknown label is a data/label mismatch, not a reason to emit NaN.
-      if (i === undefined) return (r0 + r1) / 2;
-      return r0 + step * (i + 0.5);
+      if (k === undefined) return (r0 + r1) / 2;
+      return r0 + step * (k + 0.5);
     };
     f.step = step;
     f.inner = Math.max(1, step - (pad == null ? 0 : pad));
@@ -214,9 +217,9 @@
   function axisLeft(labels, band, x, o) {
     const size = o.size == null ? 10.5 : o.size;
     let out = "";
-    for (const l of labels) {
+    for (const [i, l] of labels.entries()) {
       const emph = o.emphasis ? !!o.emphasis(l) : false;
-      out += `<text x="${n2(x)}" y="${n2(band(l) + size / 3)}" text-anchor="end" `
+      out += `<text x="${n2(x)}" y="${n2(band(l, i) + size / 3)}" text-anchor="end" `
         + `font-size="${size}"`
         + (o.family ? ` font-family="${o.family}"` : "")
         + ` fill="${emph && o.ink ? o.ink : o.muted}">${esc(l)}</text>`;
@@ -289,18 +292,18 @@
        it from a predicate rather than taking pre-built markup, so callers never
        have to know rowH, padT or the frame width. */
     if (spec.highlight) {
-      for (const r of rows) {
+      for (const [i, r] of rows.entries()) {
         if (!spec.highlight(r)) continue;
-        const y = band(spec.label(r));
+        const y = band(spec.label(r), i);
         body += `<rect x="0" y="${y - rowH / 2}" width="${W}" `
           + `height="${rowH}" fill="${spec.seal || t.seal}"/>`;
       }
     }
 
-    for (const r of rows) {
+    for (const [i, r] of rows.entries()) {
       const label = spec.label(r);
       const v = spec.value(r);
-      const y = band(label);
+      const y = band(label, i);
       body += rule(x0, x1, y, { stroke: t.hair });
       if (!Number.isFinite(v)) continue;
       const filled = spec.filled ? !!spec.filled(r)

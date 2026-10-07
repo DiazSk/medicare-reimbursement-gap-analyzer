@@ -219,12 +219,6 @@
     pFilterDim.value = pick(pFilterDim, saved.filterDim, pFilterDim.value);
 
     document.getElementById("pRun").onclick = run;
-    document.getElementById("theme").onclick = () => {
-      const dark = document.documentElement.getAttribute("data-theme") === "dark";
-      document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
-      C().readTokens();
-      run();
-    };
 
     const status = document.getElementById("pStatus");
     if (!E().isSupported()) {

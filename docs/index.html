@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -31,7 +31,6 @@
     <p class="prov" id="prov"></p>
     <p class="prov"><a href="explore.html">Explore the data yourself →</a></p>
   </div>
-  <button class="toggle" id="theme" type="button">Switch theme</button>
 </header>
 
 <section class="kpis" id="kpis"></section>
@@ -300,7 +299,6 @@ function renderAll() {
   });
 }
 function init() {
-  renderTokensInit();
   P.renderStatics(DATA);
 
   fillSelect(document.getElementById("fState"),
@@ -412,11 +410,6 @@ function init() {
       btn.disabled = false;
     }
   };
-  document.getElementById("theme").onclick = () => {
-    const dark = document.documentElement.getAttribute("data-theme") === "dark";
-    document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
-    detach(renderAll());
-  };
 
   // A saved live=1 re-enables live mode by clicking the toggle programmatically
   // rather than duplicating its body: the click handler's own await renderAll()
@@ -431,12 +424,6 @@ function init() {
     document.getElementById("fLive").click();
   } else {
     detach(renderAll());
-  }
-}
-function renderTokensInit() {
-  // Honour the OS preference on first paint; the button overrides it afterwards.
-  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-    document.documentElement.setAttribute("data-theme", "dark");
   }
 }
 if (DATA) init();

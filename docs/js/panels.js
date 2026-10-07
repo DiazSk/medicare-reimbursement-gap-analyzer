@@ -6,7 +6,7 @@
 
   const { money, count, pct, quantile } = root.MD.format;
   const { tokens, axisOpts, legendOpts, tooltipOpts, mount } = root.MD.charts;
-  const { reliability, patternPitch } = root.MD.guardrails;
+  const { reliability, patternPitch, isReliable } = root.MD.guardrails;
   const { hatch } = root.MD.charts;
   const T = () => tokens();
 
@@ -374,70 +374,39 @@
     // +2,223% wearing a thin-sample badge, not silently drop the panel's only row.
     // The unselected exclusions are named in the caveat line under the chart.
     const ok = view.nonpar.filter(d => d.measurable || d.specialty === hi)
-      .sort((a, b) => a.premium_pct - b.premium_pct);
+      .sort((a, b) => b.premium_pct - a.premium_pct);
     const forced = !!hi && view.nonpar.some(d => d.specialty === hi && !d.measurable);
 
-    mount("cNonPar", {
-      type: "bar",
-      plugins: [ZERO_RULE, SEAL_BAND(() => hi)],
-      data: {
-        labels: ok.map(d => d.specialty),
-        datasets: [{
-          label: "Patient exposure vs. participating peers",
-          data: ok.map(d => d.premium_pct),
-          /* Three semantics were stacked on this one fill -- sign, reliability and
-             selection -- and reliability was ALPHA, which put the two warning states at
-             2.05:1 and 1.67:1. The bars this guardrail exists to flag were the least
-             legible things on the page. Each semantic gets its own channel now:
+    /* Three semantics, three channels -- and one of them is now free. Stage 7c put
+       sign on BOTH position and filled/hollow, which was redundant: with a zero
+       rule, position is unambiguous on its own. So filled/hollow carries
+       RELIABILITY, which is the thing this panel most needs to signal, and the
+       1.67:1 alpha fade it replaced is gone for good.
 
-               sign         position across the zero rule, --series fill above the
-                            comparison and --whisker below. Whisker, not sheet: the
-                            negative bars ARE the finding, and a sheet fill reads as
-                            absence rather than as a result.
-               reliability  hatch pitch inside the mark (guardrails.patternPitch).
-               selection    off the mark entirely -- SEAL_BAND behind the row, plus the
-                            y-tick going to full ink.
-
-             The 1px --series border is the compliance mechanism: whatever the interior
-             does, the silhouette stays 4.03:1. Orthopedic Surgery at n=11 keeps its
-             full +2,223% bar, crisply outlined with a sparse interior -- warn, never
-             hide, and now without making the warned number harder to read. */
-          backgroundColor: (c) => {
-            const d = ok[c.dataIndex];
-            if (!d) return T().sheet;
-            const base = d.premium_pct > 0 ? T().series : T().whisker;
-            return hatch(c.chart && c.chart.ctx, base,
-                         patternPitch(reliability(Number(d.n_n))));
-          },
-          borderColor: T().series,
-          borderWidth: 1,
-        }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(false),
-          title: { text: `Specialties with at least ${st.min_nonpar_providers} `
-                     + `non-participating providers`
-                     + (forced ? ` · plus ${hi}, hatched as a thin sample` : "") },
-          tooltip: tooltipOpts({
-            label: c => ` ${pct(c.raw)} ${c.raw < 0 ? "lower" : "higher"} patient exposure`,
-            afterLabel: c => {
-              const d = ok[c.dataIndex];
-              return [`Participating: ${money(d.exp_y)} per beneficiary (${count(d.n_y)} providers)`,
-                      `Non-participating: ${money(d.exp_n)} per beneficiary (${count(d.n_n)} providers)`];
-            },
-          }),
-        },
-        scales: {
-          x: axisOpts("Non-participating exposure vs. participating", v => pct(v, 0)),
-          // Specialty names are content, not metadata, so this axis alone overrides the
-          // mono default. extra.ticks replaces ticks wholesale (charts.test.js pins
-          // that), which is why the family is set here rather than globally.
-          y: axisOpts(null, null, { grid: { display: false },
-               ticks: { color: T().ink2, font: { size: 10.5, family: T().sans } } }),
-        },
-      },
+         sign         position across the zero rule
+         reliability  filled (ok) vs hollow (thin / very-thin)
+         selection    the --seal band behind the row, plus the label going to ink */
+    const h2title = `Specialties with at least ${st.min_nonpar_providers} `
+      + `non-participating providers`
+      + (forced ? ` · plus ${hi}, hollow as a thin sample` : "");
+    mountSvg("cNonPar", h2title, {
+      rows: ok,
+      label: (d) => d.specialty,
+      value: (d) => d.premium_pct,
+      fmt: (v) => pct(v, 0),
+      // pct(v, 0) renders -0.615 as "-62%" while this page's own prose
+      // (pinned in panels.test.js) quotes -61.5%. The value column must not
+      // contradict the sentence beside it.
+      fmtValue: (v) => pct(v),
+      signed: true,
+      filled: (d) => isReliable(reliability(Number(d.n_n))),
+      emphasis: (label) => label === hi,
+      family: T().sans,
+      highlight: (d) => !!hi && d.specialty === hi,
+      axisTitle: "Non-participating exposure vs. participating",
+      aria: "Non-participating patient exposure by specialty",
+      tip: (d) => `${d.specialty} · ${pct(d.premium_pct)} · `
+        + `${count(d.n_n)} non-participating of ${count(d.n_y + d.n_n)}`,
     });
 
     // The denominators ARE the story, so they get their own chart rather than a

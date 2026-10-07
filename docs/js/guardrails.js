@@ -41,6 +41,11 @@
   const PATTERN_PITCH = { ok: 0, thin: 7, "very-thin": 12 };
   const patternPitch = (level) => PATTERN_PITCH[level] ?? 0;
 
+  /* The dot plot's filled/hollow channel needs a boolean, not a pitch. Kept as a
+     separate function rather than overloading patternPitch, so each is named for
+     the one channel it drives: pitch for the choropleth's hatch, this for a dot. */
+  const isReliable = (level) => level === "ok";
+
   function applyBadge(el, n) {
     if (!el) return;
     const level = reliability(n);
@@ -50,5 +55,6 @@
   }
 
   root.MD = root.MD || {};
-  root.MD.guardrails = { RELIABLE, WEAK, reliability, badgeText, patternPitch, applyBadge };
+  root.MD.guardrails = { RELIABLE, WEAK, reliability, badgeText, patternPitch,
+                         isReliable, applyBadge };
 })(typeof window !== "undefined" ? window : globalThis);

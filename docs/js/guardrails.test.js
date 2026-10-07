@@ -154,3 +154,22 @@ test("applyBadge consistency: data-reliability always matches reliability(n)", (
       `mismatch for n=${n}: badge says ${el.attrs["data-reliability"]} but reliability says ${G.reliability(n)}`);
   }
 });
+
+test("isReliable is true only for ok", () => {
+  // The dot plot needs a boolean for its filled/hollow channel. patternPitch
+  // keeps its name and its job -- the choropleth's below-standard hatch genuinely
+  // is a pitch -- so each function is named for the one channel it drives.
+  assert.equal(G.isReliable("ok"), true);
+  assert.equal(G.isReliable("thin"), false);
+  assert.equal(G.isReliable("very-thin"), false);
+  assert.equal(G.isReliable("nonsense"), false,
+    "an unknown level must not be treated as reliable");
+  assert.equal(G.isReliable(undefined), false);
+});
+
+test("isReliable and patternPitch agree about which levels are flagged", () => {
+  for (const level of ["ok", "thin", "very-thin"]) {
+    assert.equal(G.isReliable(level), G.patternPitch(level) === 0,
+      `the two channels disagree about "${level}"`);
+  }
+});

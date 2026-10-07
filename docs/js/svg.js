@@ -181,7 +181,7 @@
   const MONO_RATIO = 0.62;
   function labelWidth(labels, px) {
     let max = 0;
-    for (const l of labels) max = Math.max(max, String(l === null ? "" : l).length);
+    for (const l of labels) max = Math.max(max, String(l == null ? "" : l).length);
     return Math.ceil(max * px * MONO_RATIO);
   }
 
@@ -192,12 +192,6 @@
     for (const t of ticks) {
       const x = scale(t);
       if (x < r0 - 1 || x > r1 + 1) continue;   // never label off the drawing
-      if (o.grid && o.top != null) {
-        // Emitted directly rather than by rewriting a horizontal rule's y2: a
-        // string-replace on generated markup breaks the moment rule() changes.
-        out += `<line x1="${n2(x)}" y1="${n2(y)}" x2="${n2(x)}" `
-          + `y2="${n2(o.top)}" stroke="${o.grid}" stroke-width="1"/>`;
-      }
       out += `<text x="${n2(x)}" y="${n2(y + 14)}" text-anchor="middle" `
         + `font-size="10.5" fill="${o.muted}">${esc(fmt ? fmt(t) : t)}</text>`;
     }

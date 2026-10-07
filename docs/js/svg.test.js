@@ -245,14 +245,18 @@ test("axisBottom labels every tick the scale reaches", () => {
   }
 });
 
-test("axisBottom draws no label outside the drawing area", () => {
-  // The regression guard for the old Chart.js bug in its new form: an axis that
-  // silently draws nothing, or draws past its own edge.
+test("axisBottom skips any tick whose pixel falls outside the drawing", () => {
+  /* The old Chart.js axis-label bug in its new form. A scale's own ticks() never
+     leaves its domain, so this guard is unreachable through niceTicks -- the test has
+     to hand it out-of-range ticks directly. Verified: without that, deleting the
+     guard left the entire suite green. */
   const x = S.scaleLinear([0, 100], [0, 400]);
-  const a = S.axisBottom(x, 200, (v) => String(v), { axis: "#c9c7c4", muted: "#6b6d72" });
-  const xs = [...a.matchAll(/<text x="(-?[\d.]+)"/g)].map((m) => Number(m[1]));
-  assert.ok(xs.length >= 2, `expected at least 2 tick labels, got ${xs.length}`);
-  assert.ok(xs.every((v) => v >= -1 && v <= 401), `labels outside [0,400]: ${xs}`);
+  x.ticks = () => [-50, 0, 50, 500];
+  const a = S.axisBottom(x, 200, String, { axis: "#c9c7c4", muted: "#6b6d72" });
+  assert.ok(a.includes(">0<"), "an in-range tick must be labelled");
+  assert.ok(a.includes(">50<"), "an in-range tick must be labelled");
+  assert.ok(!a.includes(">-50<"), "a tick below the range must be skipped");
+  assert.ok(!a.includes(">500<"), "a tick above the range must be skipped");
 });
 
 test("zeroRule draws when the domain spans zero", () => {
@@ -271,12 +275,15 @@ test("zeroRule draws NOTHING when zero is outside the domain", () => {
   assert.equal(S.zeroRule(neg, 0, 200, { ink: "#16181a" }), "");
 });
 
-test("labelWidth reserves room from the LONGEST label", () => {
-  // Review Focus 4. "Physical Therapist in Private Practice" is 38 characters; a
-  // gutter sized from the first label clips it and the clipping is silent.
-  const narrow = S.labelWidth(["AK", "CA"], 10.5);
-  const wide = S.labelWidth(["AK", "Physical Therapist in Private Practice"], 10.5);
-  assert.ok(wide > narrow * 3, `expected the long label to dominate: ${narrow} vs ${wide}`);
+test("labelWidth reserves room from the LONGEST label, wherever it sits", () => {
+  // With the long label last, a use-the-last-label mutation also passes. Put it in
+  // the middle so only a real max works.
+  const narrow = S.labelWidth(["AK", "CA", "NY"], 10.5);
+  const wide = S.labelWidth(["AK", "Physical Therapist in Private Practice", "NY"], 10.5);
+  assert.ok(wide > narrow * 3, `the long label must dominate: ${narrow} vs ${wide}`);
+  assert.equal(S.labelWidth(["AK", undefined, "NY"], 10.5),
+               S.labelWidth(["AK", "NY"], 10.5),
+               'undefined must count as empty, not as the 9 characters of "undefined"');
 });
 
 test("axisLeft escapes free-text category labels", () => {
@@ -286,15 +293,15 @@ test("axisLeft escapes free-text category labels", () => {
   assert.ok(!/Obstetrics & Gyn/.test(a), "a raw ampersand would stop the parser");
 });
 
-test("axisLeft can emphasise one label without restyling the rest", () => {
-  // Hero 2's selected specialty goes to full ink; everything else stays secondary.
+test("axisLeft emphasises the matching label and only that one", () => {
+  // Checking that both inks appear somewhere passes with the predicate inverted.
   const labels = ["a", "b"];
   const band = S.scaleBand(labels, [0, 100], 0);
   const a = S.axisLeft(labels, band, 50, {
     muted: "#6b6d72", ink: "#16181a", emphasis: (l) => l === "b",
   });
-  assert.match(a, /fill="#16181a"/);
-  assert.match(a, /fill="#6b6d72"/);
+  assert.match(a, /fill="#16181a">b</, "the matching label takes full ink");
+  assert.match(a, /fill="#6b6d72">a</, "every other label stays muted");
 });
 
 test("frame wraps a viewBox with a role and an aria-label", () => {
@@ -309,4 +316,9 @@ test("frame returns an empty string for an empty body", () => {
   // Review Focus 1: a zero-row cohort must not produce a labelled empty frame
   // that reads as "no data here" when the honest answer belongs in prose.
   assert.equal(S.frame(400, 200, "", { aria: "x" }), "");
+});
+
+test("frame escapes its aria-label, which carries free-text specialty names", () => {
+  const f = S.frame(100, 50, "<circle/>", { aria: 'Obstetrics & Gynecology "x"' });
+  assert.match(f, /aria-label="Obstetrics &amp; Gynecology &quot;x&quot;"/);
 });

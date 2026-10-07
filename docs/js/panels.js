@@ -291,42 +291,19 @@
     const top = sorted.slice(0, 10), bot = sorted.slice(-10).reverse();
     const pick = top.concat(bot).filter((v, i, a) =>
       a.findIndex(x => x.state === v.state) === i);
-    pick.sort((a, b) => a.premium - b.premium);
+    pick.sort((a, b) => b.premium - a.premium);
 
-    mount("cGeo", {
-      type: "bar",
-      plugins: [ZERO_RULE],
-      data: {
-        labels: pick.map(r => r.state),
-        datasets: [{
-          label: "Geographic premium",
-          data: pick.map(r => r.premium),
-          // Sign is position across the zero rule, reinforced by filled (above the
-          // standardized amount) vs hollow (below). The old two-hue ramp was always
-          // redundant with position, so this loses nothing and spends no second hue.
-          backgroundColor: pick.map(r => r.premium >= 0 ? T().series : T().sheet),
-          borderColor: T().series,
-          borderWidth: 1,
-        }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(false),
-          title: { text: "Largest net senders and receivers" },
-          tooltip: tooltipOpts({
-            label: c => ` ${money(c.raw)} geographic premium`,
-            afterLabel: c => {
-              const r = pick[c.dataIndex];
-              return `${money(r.pymt)} total Medicare paid`;
-            },
-          }),
-        },
-        scales: {
-          x: axisOpts("Geographic premium (paid − standardized)", v => money(v, 0)),
-          y: axisOpts(null, null, { grid: { display: false } }),
-        },
-      },
+    mountSvg("cGeo", "Largest net senders and receivers", {
+      rows: pick,
+      label: (r) => r.state,
+      value: (r) => r.premium,
+      fmt: (v) => money(v, 0),
+      fmtValue: (v) => money(v),
+      signed: true,
+      axisTitle: "Geographic premium (paid − standardized)",
+      aria: "Largest net senders and receivers of geographic premium, by state",
+      tip: (r) => `${r.state} · ${money(r.premium)} premium · `
+        + `${money(r.pymt)} total Medicare paid`,
     });
 
     document.getElementById("h1read").textContent = hero1Read(sorted);
@@ -793,37 +770,19 @@
     // Both directions on one diverging axis -- showing only the positive tail is
     // how the original "savings" framing went wrong.
     const bar = view.siteBarNeg.slice(0, 8).concat(view.siteBarPos.slice(0, 8))
-      .sort((a, b) => (a.savings || 0) - (b.savings || 0));
-    mount("cSiteBar", {
-      type: "bar",
-      plugins: [ZERO_RULE],
-      data: {
-        labels: bar.map(d => d.hcpcs),
-        datasets: [{
-          label: "Facility minus office, times facility volume",
-          data: bar.map(d => d.savings),
-          backgroundColor: bar.map(d => (d.savings || 0) >= 0 ? T().series : T().sheet),
-          borderColor: T().series,
-          borderWidth: 1,
-        }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(false),
-                    title: { text: "Largest differentials, both directions" },
-          tooltip: tooltipOpts({
-            title: c => bar[c[0].dataIndex].hcpcs,
-            label: c => ` ${c.raw >= 0 ? "Facility costs more: " : "Office costs more: "}`
-              + `${money(Math.abs(c.raw))}`,
-            afterLabel: c => bar[c.dataIndex].desc.slice(0, 70),
-          }),
-        },
-        scales: {
-          x: axisOpts("Facility premium (negative = office pays more)", v => money(v, 0)),
-          y: axisOpts(null, null, { grid: { display: false } }),
-        },
-      },
+      .sort((a, b) => (b.savings || 0) - (a.savings || 0));
+    mountSvg("cSiteBar", "Largest differentials, both directions", {
+      rows: bar,
+      label: (d) => d.hcpcs,
+      value: (d) => d.savings,
+      fmt: (v) => money(v, 0),
+      fmtValue: (v) => money(v),
+      signed: true,
+      axisTitle: "Facility premium (negative = office pays more)",
+      aria: "Largest site-of-service differentials in both directions",
+      tip: (d) => `${d.hcpcs} · `
+        + `${(d.savings || 0) >= 0 ? "facility costs more" : "office costs more"} `
+        + `${money(Math.abs(d.savings || 0))} · ${d.desc}`,
     });
 
     document.getElementById("h5read").textContent =

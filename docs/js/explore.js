@@ -178,7 +178,7 @@
         labels: top.map((r) => chartLabel(r, rows, cols)),
         datasets: [{
           label: m.label, data: top.map((r) => r.value),
-          backgroundColor: T.s1, borderWidth: 0, borderRadius: 2,
+          backgroundColor: T.series, borderWidth: 0,
         }],
       },
       options: {

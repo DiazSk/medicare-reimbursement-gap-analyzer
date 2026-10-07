@@ -101,125 +101,122 @@
           data: pick.map(r => r.premium),
           // Color encodes the sign, which is the point; it is not a series identity.
           backgroundColor: pick.map(r => diverging(r.premium >= 0 ? 0.75 : -0.75)),
-          borderWidth: 0, borderRadius: 2,
+          borderWidth: 0,
         }],
       },
       options: {
         indexAxis: "y",
         plugins: {
           legend: legendOpts(false),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Largest net senders and receivers", align: "start",
+                    title: { text: "Largest net senders and receivers", align: "start",
                    padding: { bottom: 10 } },
-          tooltip: tooltipOpts({
-            label: c => ` ${money(c.raw)} geographic premium`,
-            afterLabel: c => {
-              const r = pick[c.dataIndex];
-              return `${money(r.pymt)} total Medicare paid`;
-            },
-          }),
-        },
-        scales: {
-          x: axisOpts("Geographic premium (paid − standardized)", v => money(v, 0)),
-          y: axisOpts(null, null, { grid: { display: false } }),
-        },
-      },
-    });
-
-    document.getElementById("h1read").textContent = hero1Read(sorted);
-  }
-
-  /* Every readout below is a pure function of the view so it can be tested at
-     cohort counts the national payload never produces. Static mode always hands
-     these panels the full national arrays, so only live mode reaches the 1- and
-     0-cohort branches — but the branches are chosen from the data, not from the
-     mode, because "which mode am I in" is not something a renderer should know.
-
-     The templates were written against the static payload, where nonpar_stats
-     and the kpi block are national regardless of filter. Live mode recomputes
-     them per filter, which is more correct and which drove the originals into
-     sentences they were never written for: hero 1 naming one state as both
-     extremes with a $0.00 spread between them. */
-  const POLICY = "Geographic adjustment is deliberate Medicare policy (wages and "
-    + "rent differ); the magnitude is what is worth seeing.";
-
-  function hero1Read(sorted) {
-    if (!sorted.length) {
-      return "No state matches this filter, so there is no geographic premium to read.";
-    }
-    if (sorted.length === 1) {
-      // A spread needs two cohorts. Naming the same state as both extremes and
-      // reporting $0.00 between them reads as a broken calculation.
-      const one = sorted[0];
-      return `Reading it: this filter selects a single cohort. ${one.state} bills `
-        + `${money(Math.abs(one.premium))} ${one.premium >= 0 ? "more" : "less"} than the `
-        + `geographically standardized amount for the same work`
-        // Math.abs on BOTH figures: "more"/"less" above already carries the
-        // direction, so a signed per-beneficiary value reads as a double
-        // negative ("bills $4.5K less … -$1.29 per beneficiary-proxy").
-        + `${Number.isFinite(one.perBene)
-            ? ` — ${money(Math.abs(one.perBene), 2)} per beneficiary-proxy` : ""}. `
-        + `Comparing states needs more than one selected, so there is no spread to rank. `
-        + POLICY;
-    }
-    const mx = sorted[0], mn = sorted[sorted.length - 1];
-    return `Reading it: ${mx.state} bills ${money(mx.premium)} more than the geographically `
-      + `standardized amount for the same work, while ${mn.state} bills `
-      + `${money(Math.abs(mn.premium))} less — a spread of `
-      + `${money(mx.premium - mn.premium)} attributable to location, not medicine. `
-      + POLICY;
-  }
-
-  function hero1Ramp(drawn, bound, lo, hi) {
-    // lo/hi come from Math.min/max over `drawn`; at zero rows they are ±Infinity,
-    // which money() renders as an em dash rather than "$Infinity".
-    if (!drawn.length) return "no mapped state matches this filter";
-    if (drawn.length === 1) {
-      // Unlike h1read this chip has no "more"/"less" to carry the direction, so
-      // it says it in the legend's own words rather than leaning on a minus sign
-      // ("single cohort · -$8.95 per beneficiary-proxy" was the OK/Unknown case).
-      return `single cohort · ${money(Math.abs(lo), 2)} `
-        + `${lo < 0 ? "below" : "above"} standard per beneficiary-proxy`;
-    }
-    return `scale ±${money(bound, 2)} per beneficiary-proxy · actual range `
-      + `${money(lo, 2)} to ${money(hi, 2)} (beyond the scale is clamped)`;
-  }
-
-  /* ── HERO 2 ─────────────────────────────────────────────────────────────── */
-  function renderHero2(view, filters) {
-    const st = view.nonparStats;
-    const hi = filters.spec === "all" ? null : filters.spec;
-    // Specialties with a real non-par cohort, PLUS whichever one the filter
-    // selected. Warn, never hide: filtering to Orthopedic Surgery must show its
-    // +2,223% wearing a thin-sample badge, not silently drop the panel's only row.
-    // The unselected exclusions are named in the caveat line under the chart.
-    const ok = view.nonpar.filter(d => d.measurable || d.specialty === hi)
-      .sort((a, b) => a.premium_pct - b.premium_pct);
-    const forced = !!hi && view.nonpar.some(d => d.specialty === hi && !d.measurable);
-
-    mount("cNonPar", {
-      type: "bar",
-      data: {
-        labels: ok.map(d => d.specialty),
-        datasets: [{
-          label: "Patient exposure vs. participating peers",
-          data: ok.map(d => d.premium_pct),
-          backgroundColor: ok.map(d => hi && d.specialty !== hi
-            ? T().grid
-            : withAlpha(diverging(d.premium_pct > 0 ? 0.75 : -0.75),
-                        opacityFor(reliability(Number(d.n_n))))),
-          borderWidth: 0, borderRadius: 2,
-        }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(false),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: `Specialties with at least ${st.min_nonpar_providers} `
+                   tooltip: tooltipOpts({
+                   label: c => ` ${money(c.raw)} geographic premium`,
+                   afterLabel: c => {
+                   const r = pick[c.dataIndex];
+                   return `${money(r.pymt)} total Medicare paid`;
+                   },
+                   }),
+                   },
+                   scales: {
+                   x: axisOpts("Geographic premium (paid − standardized)", v => money(v, 0)),
+                   y: axisOpts(null, null, { grid: { display: false } }),
+                   },
+                   },
+                   });
+                   
+                   document.getElementById("h1read").textContent = hero1Read(sorted);
+                   }
+                   
+                   /* Every readout below is a pure function of the view so it can be tested at
+                   cohort counts the national payload never produces. Static mode always hands
+                   these panels the full national arrays, so only live mode reaches the 1- and
+                   0-cohort branches — but the branches are chosen from the data, not from the
+                   mode, because "which mode am I in" is not something a renderer should know.
+                   
+                   The templates were written against the static payload, where nonpar_stats
+                   and the kpi block are national regardless of filter. Live mode recomputes
+                   them per filter, which is more correct and which drove the originals into
+                   sentences they were never written for: hero 1 naming one state as both
+                   extremes with a $0.00 spread between them. */
+                   const POLICY = "Geographic adjustment is deliberate Medicare policy (wages and "
+                   + "rent differ); the magnitude is what is worth seeing.";
+                   
+                   function hero1Read(sorted) {
+                   if (!sorted.length) {
+                   return "No state matches this filter, so there is no geographic premium to read.";
+                   }
+                   if (sorted.length === 1) {
+                   // A spread needs two cohorts. Naming the same state as both extremes and
+                   // reporting $0.00 between them reads as a broken calculation.
+                   const one = sorted[0];
+                   return `Reading it: this filter selects a single cohort. ${one.state} bills `
+                   + `${money(Math.abs(one.premium))} ${one.premium >= 0 ? "more" : "less"} than the `
+                   + `geographically standardized amount for the same work`
+                   // Math.abs on BOTH figures: "more"/"less" above already carries the
+                   // direction, so a signed per-beneficiary value reads as a double
+                   // negative ("bills $4.5K less … -$1.29 per beneficiary-proxy").
+                   + `${Number.isFinite(one.perBene)
+                   ? ` — ${money(Math.abs(one.perBene), 2)} per beneficiary-proxy` : ""}. `
+                   + `Comparing states needs more than one selected, so there is no spread to rank. `
+                   + POLICY;
+                   }
+                   const mx = sorted[0], mn = sorted[sorted.length - 1];
+                   return `Reading it: ${mx.state} bills ${money(mx.premium)} more than the geographically `
+                   + `standardized amount for the same work, while ${mn.state} bills `
+                   + `${money(Math.abs(mn.premium))} less — a spread of `
+                   + `${money(mx.premium - mn.premium)} attributable to location, not medicine. `
+                   + POLICY;
+                   }
+                   
+                   function hero1Ramp(drawn, bound, lo, hi) {
+                   // lo/hi come from Math.min/max over `drawn`; at zero rows they are ±Infinity,
+                   // which money() renders as an em dash rather than "$Infinity".
+                   if (!drawn.length) return "no mapped state matches this filter";
+                   if (drawn.length === 1) {
+                   // Unlike h1read this chip has no "more"/"less" to carry the direction, so
+                   // it says it in the legend's own words rather than leaning on a minus sign
+                   // ("single cohort · -$8.95 per beneficiary-proxy" was the OK/Unknown case).
+                   return `single cohort · ${money(Math.abs(lo), 2)} `
+                   + `${lo < 0 ? "below" : "above"} standard per beneficiary-proxy`;
+                   }
+                   return `scale ±${money(bound, 2)} per beneficiary-proxy · actual range `
+                   + `${money(lo, 2)} to ${money(hi, 2)} (beyond the scale is clamped)`;
+                   }
+                   
+                   /* ── HERO 2 ─────────────────────────────────────────────────────────────── */
+                   function renderHero2(view, filters) {
+                   const st = view.nonparStats;
+                   const hi = filters.spec === "all" ? null : filters.spec;
+                   // Specialties with a real non-par cohort, PLUS whichever one the filter
+                   // selected. Warn, never hide: filtering to Orthopedic Surgery must show its
+                   // +2,223% wearing a thin-sample badge, not silently drop the panel's only row.
+                   // The unselected exclusions are named in the caveat line under the chart.
+                   const ok = view.nonpar.filter(d => d.measurable || d.specialty === hi)
+                   .sort((a, b) => a.premium_pct - b.premium_pct);
+                   const forced = !!hi && view.nonpar.some(d => d.specialty === hi && !d.measurable);
+                   
+                   mount("cNonPar", {
+                   type: "bar",
+                   data: {
+                   labels: ok.map(d => d.specialty),
+                   datasets: [{
+                   label: "Patient exposure vs. participating peers",
+                   data: ok.map(d => d.premium_pct),
+                   backgroundColor: ok.map(d => hi && d.specialty !== hi
+                   ? T().grid
+                   : withAlpha(diverging(d.premium_pct > 0 ? 0.75 : -0.75),
+                   opacityFor(reliability(Number(d.n_n))))),
+                   borderWidth: 0,
+                   }],
+                   },
+                   options: {
+                   indexAxis: "y",
+                   plugins: {
+                   legend: legendOpts(false),
+          title: { text: `Specialties with at least ${st.min_nonpar_providers} `
                      + `non-participating providers`
-                     + (forced ? ` · plus ${hi}, faded as a thin sample` : ""),
-                   align: "start", padding: { bottom: 10 } },
+                     + (forced ? ` · plus ${hi}, faded as a thin sample` : "") },
           tooltip: tooltipOpts({
             label: c => ` ${pct(c.raw)} ${c.raw < 0 ? "lower" : "higher"} patient exposure`,
             afterLabel: c => {
@@ -231,8 +228,11 @@
         },
         scales: {
           x: axisOpts("Non-participating exposure vs. participating", v => pct(v, 0)),
+          // Specialty names are content, not metadata, so this axis alone overrides the
+          // mono default. extra.ticks replaces ticks wholesale (charts.test.js pins
+          // that), which is why the family is set here rather than globally.
           y: axisOpts(null, null, { grid: { display: false },
-               ticks: { color: T().muted, font: { size: 10.5 } } }),
+               ticks: { color: T().ink2, font: { size: 10.5, family: T().sans } } }),
         },
       },
     });
@@ -247,25 +247,26 @@
         labels: cohort.map(d => d.specialty),
         datasets: [
           { label: "Participating providers", data: cohort.map(d => d.n_y),
-            backgroundColor: T().s1, borderWidth: 0, borderRadius: 2 },
+            backgroundColor: T().series, borderWidth: 0 },
           { label: "Non-participating providers", data: cohort.map(d => d.n_n),
-            backgroundColor: T().s2, borderWidth: 0, borderRadius: 2 },
+            backgroundColor: T().s2, borderWidth: 0 },
         ],
       },
       options: {
         indexAxis: "y",
         plugins: {
           legend: legendOpts(true),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Why the ratios are fragile: cohort sizes (log scale)",
-                   align: "start", padding: { bottom: 10 } },
+                    title: { text: "Why the ratios are fragile: cohort sizes (log scale)" },
           tooltip: tooltipOpts({ label: c => ` ${c.dataset.label}: ${count(c.raw)}` }),
         },
         scales: {
           x: axisOpts("Distinct providers", v => count(v),
                       { type: "logarithmic", min: 1 }),
+          // Specialty names are content, not metadata, so this axis alone overrides the
+          // mono default. extra.ticks replaces ticks wholesale (charts.test.js pins
+          // that), which is why the family is set here rather than globally.
           y: axisOpts(null, null, { grid: { display: false },
-               ticks: { color: T().muted, font: { size: 10.5 } } }),
+               ticks: { color: T().ink2, font: { size: 10.5, family: T().sans } } }),
         },
       },
     });
@@ -336,8 +337,8 @@
       type: "scatter",
       data: {
         datasets: [
-          { label: "Actual distribution", data: pts, showLine: true, borderColor: T().s1,
-            backgroundColor: T().s1, borderWidth: 2.2, pointRadius: 0, fill: false,
+          { label: "Actual distribution", data: pts, showLine: true, borderColor: T().series,
+            backgroundColor: T().series, borderWidth: 2.2, pointRadius: 0, fill: false,
             tension: 0 },
           { label: "Perfect equality", data: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
             showLine: true, borderColor: T().muted, borderWidth: 1.4,
@@ -347,9 +348,7 @@
       options: {
         plugins: {
           legend: legendOpts(true),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: `Lorenz curve — Gini ${view.kpi.gini}`,
-                   align: "start", padding: { bottom: 10 } },
+                    title: { text: `Lorenz curve — Gini ${view.kpi.gini}` },
           tooltip: tooltipOpts({
             label: c => ` ${pct(c.parsed.x)} of prescribers → ${pct(c.parsed.y)} of drug spend`,
           }),
@@ -368,15 +367,13 @@
       data: {
         labels: j.map(d => d.hcpcs),
         datasets: [{ label: "National Medicare payment", data: j.map(d => d.pymt),
-                     backgroundColor: T().s3, borderWidth: 0, borderRadius: 2 }],
+                     backgroundColor: T().s3, borderWidth: 0 }],
       },
       options: {
         indexAxis: "y",
         plugins: {
           legend: legendOpts(false),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Largest drug codes by Medicare payment",
-                   align: "start", padding: { bottom: 10 } },
+                    title: { text: "Largest drug codes by Medicare payment" },
           tooltip: tooltipOpts({
             title: c => j[c[0].dataIndex].hcpcs,
             label: c => ` ${money(c.raw)}`,
@@ -433,7 +430,7 @@
     const rows = view.credentials.filter(d => d.shared)
       .filter(d => tiers.some(t => d[t] !== null && d[t] !== undefined))
       .sort((a, b) => a.hcpcs.localeCompare(b.hcpcs));
-    const colors = { md: T().s1, np: T().s2, pa: T().s3, spec: T().s4 };
+    const colors = { md: T().series, np: T().s2, pa: T().s3, spec: T().s4 };
 
     mount("cCred", {
       type: "bar",
@@ -441,15 +438,13 @@
         labels: rows.map(d => d.hcpcs),
         datasets: tiers.map(t => ({
           label: TIER_LABELS[t], data: rows.map(d => d[t]),
-          backgroundColor: colors[t], borderWidth: 0, borderRadius: 2,
+          backgroundColor: colors[t], borderWidth: 0,
         })),
       },
       options: {
         plugins: {
           legend: legendOpts(true),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Markup ratio on shared evaluation & management codes",
-                   align: "start", padding: { bottom: 10 } },
+                    title: { text: "Markup ratio on shared evaluation & management codes" },
           tooltip: tooltipOpts({
             title: c => {
               const d = rows[c[0].dataIndex];
@@ -526,7 +521,7 @@
           { label: "Procedure code (bubble = facility volume)",
             data: rows.map(d => ({ x: d.o_pymt, y: d.f_pymt,
               r: 4 + 14 * Math.sqrt((d.f_svcs || 0) / maxV) })),
-            backgroundColor: T().s1 + "b0", borderColor: T().s1, borderWidth: 1 },
+            backgroundColor: T().series + "b0", borderColor: T().series, borderWidth: 1 },
           { label: "Equal payment in both settings", type: "line",
             data: [{ x: 0, y: 0 }, { x: lim, y: lim }],
             borderColor: T().muted, borderWidth: 1.4, borderDash: [5, 4],
@@ -536,9 +531,7 @@
       options: {
         plugins: {
           legend: legendOpts(true),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "The 60 highest-volume codes billed in both settings",
-                   align: "start", padding: { bottom: 10 } },
+                    title: { text: "The 60 highest-volume codes billed in both settings" },
           tooltip: tooltipOpts({
             title: c => c[0].datasetIndex === 0 ? rows[c[0].dataIndex].hcpcs : "",
             label: c => {
@@ -574,16 +567,14 @@
           label: "Facility minus office, times facility volume",
           data: bar.map(d => d.savings),
           backgroundColor: bar.map(d => diverging((d.savings || 0) >= 0 ? 0.75 : -0.75)),
-          borderWidth: 0, borderRadius: 2,
+          borderWidth: 0,
         }],
       },
       options: {
         indexAxis: "y",
         plugins: {
           legend: legendOpts(false),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Largest differentials, both directions",
-                   align: "start", padding: { bottom: 10 } },
+                    title: { text: "Largest differentials, both directions" },
           tooltip: tooltipOpts({
             title: c => bar[c[0].dataIndex].hcpcs,
             label: c => ` ${c.raw >= 0 ? "Facility costs more: " : "Office costs more: "}`

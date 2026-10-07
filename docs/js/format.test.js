@@ -44,7 +44,9 @@ test("diverging clamps out-of-range inputs instead of extrapolating", () => {
 });
 
 test("inkOn picks dark ink on light fills and light ink on dark fills", () => {
-  assert.equal(F.inkOn("rgb(255,255,255)"), "#0b0b0b");
+  assert.equal(F.inkOn("rgb(255,255,255)"), "#16181a");   // the design's --ink
+  assert.equal(F.inkOn("rgb(0,0,0)", "#111", "#eee"), "#eee");
+  assert.equal(F.inkOn("rgb(255,255,255)", "#111", "#eee"), "#111");
   assert.equal(F.inkOn("rgb(0,0,0)"), "#ffffff");
 });
 

@@ -39,13 +39,21 @@
     return `rgb(${c[0]},${c[1]},${c[2]})`;
   }
 
-  // Relative luminance decides label ink, so tile text stays legible at both extremes.
-  function inkOn(rgb) {
+  /* Relative luminance decides label ink, so a label stays legible at both extremes.
+     The two inks are PARAMETERS with defaults rather than CSS reads: this module is
+     deliberately DOM-free (it loads in node with no document) and format.test.js pins
+     both return values. The defaults are the design's --ink and white.
+
+     The 0.4 threshold is wrong for a continuous ramp and right for a quantised one.
+     On a continuous scale it flips at a luminance where white is only 2.50:1; the
+     four-step ramp never produces a fill in that band, which is the point of binning. */
+  function inkOn(rgb, dark, light) {
     const [r, g, b] = rgb.match(/\d+/g).map(Number).map((v) => {
       v /= 255;
       return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
     });
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#0b0b0b" : "#ffffff";
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4
+      ? (dark || "#16181a") : (light || "#ffffff");
   }
 
   function quantile(sorted, q) {

@@ -59,6 +59,15 @@
     --series: #2a78d6;   /*  4.03:1 -- marks only, NEVER text */
     --link:   #184f95;   /*  7.39:1 -- the text-safe blue */
     --warn:   #a3322b;   /*  6.28:1 -- the one sanctioned exception, badge only */
+    --whisker: #86b6ef;  /* fill only, always inside a --series border */
+    /* Four-step magnitude ramp. The label ink flips to white between r300 and r500:
+       ink on r100 13.45:1, on r300 7.11:1; white on r500 5.39:1, on r700 11.95:1.
+       Quantising is what removes the continuous ramp's illegible dead band, where a
+       fill fails 4.5:1 against BOTH inks. */
+    --r100: #cde2fb;
+    --r300: #6da7ec;
+    --r500: #256abf;
+    --r700: #0d366b;
 
     /* Still here because their call sites are: diverging() reads --div-* at six places
        and panels.js reads --series-2/3/4 at four. Both sets go when those encodings

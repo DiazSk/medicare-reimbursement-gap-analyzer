@@ -53,7 +53,10 @@
     { key: "rate",   label: "Payment rate", ratio: true,
       sql: "SUM(Tot_Mdcr_Pymt_Amt_sum) / NULLIF(SUM(Tot_Mdcr_Alowd_Amt_sum), 0)",
       format: (v) => F().pct(v, 1) },
-    { key: "geoprem", label: "Geographic premium",
+    // signed: the only measure that can go negative (Rural is below zero), so the plot
+    // draws a zero rule and hollows the negatives. Every other measure is a sum of
+    // non-negative amounts or a positive ratio.
+    { key: "geoprem", label: "Geographic premium", signed: true,
       sql: "SUM(Tot_Mdcr_Pymt_Amt_sum) - SUM(Tot_Mdcr_Stdzd_Amt_sum)", format: (v) => F().money(v),
       axisFmt: (v) => F().moneyTick(v) },
   ];
@@ -174,14 +177,14 @@
     return `${String(r[rows]).slice(0, budget)} · ${String(r[cols]).slice(0, budget)}`;
   }
 
-  /* The explorer uses the same dot plot as the findings page. Orientation is now
-     unconditional: the old code drew vertically at 8 rows or fewer, but pivot labels
-     are long category strings that read better horizontally, so dotPlot has no
-     vertical mode. The data arrives ORDER BY value DESC and scaleBand puts index 0 at
-     the top, so there is deliberately no .reverse(). */
   const dimLabel = (k) => (DIMENSIONS.find((d) => d.key === k) || { label: k }).label;
 
+  // The explorer draws the same dot plot as the findings page.
   function renderChart(data, rows, cols, m) {
+    /* Orientation is unconditional: the old code drew vertically at 8 rows or fewer, but
+       pivot labels are long category strings that read better horizontally, and dotPlot
+       has no vertical mode. buildSql orders by value DESC and scaleBand puts index 0 at
+       the top, so there is deliberately no .reverse(). */
     const top = data.slice(0, 25);
     /* explore.html does not load panels.js, so mountSvg is unavailable and the host is
        read directly. The width is NOT optional -- omitting it gives a 760-wide viewBox
@@ -195,6 +198,7 @@
       value: (r) => r.value,
       fmt: (v) => (m.axisFmt || m.format)(v),   // terse ticks; fmtValue keeps the cents
       fmtValue: (v) => m.format(v),
+      signed: !!m.signed,
       axisTitle: m.label,
       aria: cols ? `${m.label} by ${dimLabel(rows)} and ${dimLabel(cols)}`
                  : `${m.label} by ${dimLabel(rows)}`,

@@ -654,3 +654,98 @@ test("a moneyTick axis labels 1.5e9 as $1.5B, never rounds it to $2B", () => {
   assert.ok(ticks.includes("$1.5B"), `ticks were ${ticks}`);
   assert.ok(!ticks.includes("$2B"), `ticks were ${ticks}`);
 });
+
+/* ── dotPlot's horizontal budget ─────────────────────────────────────────────
+   The value column and the label gutter are both sized from their content, and the
+   plot area has a floor. Computed from the markup, not eyeballed. */
+const MONO = 10.5 * 0.62;      // px per character at the chart's font size
+const plot = (width, rows, o) => S.dotPlot(Object.assign({
+  t: TK, width, rows, label: (r) => r.k, value: (r) => r.v,
+  fmt: String, axisTitle: "x", aria: "y", tip: (r) => r.k,
+}, o));
+const hair = (out) => {   // the first row hairline: x1 = plot left, x2 = plot right
+  const m = out.match(/<line x1="([\d.-]+)" y1="[\d.-]+" x2="([\d.-]+)"/);
+  return { x0: Number(m[1]), x1: Number(m[2]) };
+};
+
+test("a 13-character value is not clipped at any width", () => {
+  // 2,645,126,871 services drew as "2,645,126,87": no error, a plausible number wrong
+  // by a factor of ten, beside a table showing the right one.
+  const big = (v) => v.toLocaleString("en-US");
+  for (const width of [320, 375, 526, 606, 1154]) {
+    const out = plot(width, [{ k: "true", v: 2645126871 }, { k: "false", v: 9 }],
+      { fmtValue: big });
+    const m = out.match(/<text x="([\d.]+)"[^>]*>2,645,126,871<\/text>/);
+    assert.ok(m, `the full value was not drawn at ${width}`);
+    const right = Number(m[1]) + "2,645,126,871".length * MONO;
+    assert.ok(right <= width, `value ends at ${right.toFixed(1)}, past the ${width}px viewBox`);
+  }
+});
+
+test("values that already fit keep the 86px column, so existing charts do not move", () => {
+  for (const width of [526, 606, 1154]) {
+    const out = plot(width, [{ k: "a", v: 1 }], { fmtValue: () => "$7.37B" });
+    assert.equal(hair(out).x1, width - 86, `plot right edge moved at ${width}`);
+  }
+});
+
+test("the plot keeps at least 160px at phone width, and labels yield with an ellipsis", () => {
+  const long = "Physical Therapist in Private";          // 29 chars
+  for (const width of [320, 375]) {
+    // tip differs from the label, or the dot's own <title> would satisfy the check below
+    const out = plot(width, [{ k: long, v: 1 }, { k: "b", v: 2 }], { tip: () => "tip" });
+    const { x0, x1 } = hair(out);
+    assert.ok(x1 - x0 >= 160, `plot is ${x1 - x0}px at ${width}`);
+    assert.match(out, /\u2026/, "a squeezed label ends in an ellipsis");
+    assert.ok(out.includes(`<title>${long}</title>`), "the full label stays as a hover title");
+  }
+});
+
+test("a short label keeps its short gutter: the floor never widens one", () => {
+  // cGeo's two-letter state codes had their gutter pushed from 28 to 48 by the floor.
+  const { x0 } = hair(plot(1154, [{ k: "CA", v: 1 }, { k: "NJ", v: 2 }]));
+  assert.equal(x0, Math.ceil(2 * MONO) + 14);
+});
+
+test("526 and 606 hosts still draw the full label, untruncated", () => {
+  const long = "Physical Therapist in Private";
+  for (const width of [526, 606]) {
+    const out = plot(width, [{ k: long, v: 1 }]);
+    assert.ok(out.includes(`>${long}</text>`), `label truncated at ${width}`);
+    assert.ok(!out.includes("\u2026"));
+  }
+});
+
+test("two labels that truncate alike still get separate rows", () => {
+  const out = plot(320, [{ k: "Physical Therapist in Private A", v: 1 },
+                         { k: "Physical Therapist in Private B", v: 2 }]);
+  assert.equal((out.match(/<circle/g) || []).length, 2);
+  const ys = [...out.matchAll(/<circle cx="[\d.-]+" cy="([\d.-]+)"/g)].map((m) => m[1]);
+  assert.notEqual(ys[0], ys[1]);
+});
+
+test("dumbbellPlot keeps its plot floor at phone width too", () => {
+  const out = S.dumbbellPlot({
+    t: TK, width: 320, rows: [{ k: "Physical Therapist in Private", a: 10, b: 1000 }],
+    label: (r) => r.k, a: (r) => r.a, b: (r) => r.b, fmt: String,
+    axisTitle: "x", aria: "y", tip: (r) => r.k, legend: ["a", "b"],
+  });
+  const { x0, x1 } = hair(out);
+  assert.ok(x1 - x0 >= 160, `dumbbell plot is ${x1 - x0}px`);
+});
+
+test("axis ticks are thinned until neighbours clear each other, and only then", () => {
+  // Three "100,000,000" labels in a 160px plot printed on top of one another.
+  const x = (out) => [...out.matchAll(/<text x="([\d.-]+)"[^>]*text-anchor="middle"[^>]*>([^<]+)</g)]
+    .map((m) => [Number(m[1]), m[2]]);
+  const narrow = x(plot(320, [{ k: "a", v: 100e6 }, { k: "b", v: 380e6 }],
+    { fmt: (v) => v.toLocaleString("en-US") }));
+  assert.ok(narrow.length >= 2);
+  for (let i = 1; i < narrow.length; i++) {
+    assert.ok(narrow[i][0] - narrow[i - 1][0] >= narrow[i][1].length * MONO,
+      `ticks ${narrow[i - 1][1]} and ${narrow[i][1]} overlap`);
+  }
+  const wide = x(plot(1154, [{ k: "a", v: 100e6 }, { k: "b", v: 380e6 }],
+    { fmt: (v) => v.toLocaleString("en-US") }));
+  assert.ok(wide.length > narrow.length, "a wide chart keeps every tick");
+});

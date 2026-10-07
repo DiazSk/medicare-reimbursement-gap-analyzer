@@ -188,6 +188,21 @@
     return Math.ceil(max * px * MONO_RATIO);
   }
 
+  /* The horizontal budget, shared by both plots. The label gutter takes what its
+     longest label needs (cap 220) -- but never so much that the plot area falls below
+     MIN_PLOT, because a 37px plot at 320px is every dot in one smear. When the gutter
+     has to yield, labels are cut to fit with an ellipsis (`maxChars`, else null).
+     MIN_PLOT is 160: the narrowest measured findings-page host (526) leaves 243px with
+     the widest gutter, so 160 never touches it, while at a 375px phone it still leaves
+     a plot a reader can read. GUTTER_FLOOR keeps about six characters of label. */
+  const MIN_PLOT = 160, GUTTER_FLOOR = 48;
+  function fitGutter(labels, W, rightReserve) {
+    const want = Math.min(220, labelWidth(labels, 10.5) + 14);
+    const gutter = Math.min(want, Math.max(GUTTER_FLOOR, W - rightReserve - MIN_PLOT));
+    if (gutter >= want) return { gutter, maxChars: null };
+    return { gutter, maxChars: Math.max(2, Math.floor((gutter - 14) / (10.5 * MONO_RATIO))) };
+  }
+
   function axisBottom(scale, y, fmt, o) {
     const all = scale.ticks ? scale.ticks(5) : [];
     const r0 = scale.range[0], r1 = scale.range[1];
@@ -209,9 +224,16 @@
       if (new Set(labels).size !== labels.length) f = o.fmtPrecise;
     }
     let out = rule(r0, r1, y, { stroke: o.axis, width: 1 });
-    for (const t of drawn) {
+    /* Thin the ticks until neighbours clear each other. At a phone's 160px plot, three
+       "100,000,000" labels (~72px each) printed on top of one another. Every k-th tick
+       is kept, from the first; k is 1 -- nothing dropped -- wherever labels already fit. */
+    const text = drawn.map((t) => String(f ? f(t) : t));
+    const gap = drawn.length > 1 ? Math.abs(scale(drawn[1]) - scale(drawn[0])) : Infinity;
+    const k = Math.max(1, Math.ceil((labelWidth(text, 10.5) + 8) / gap));
+    for (const [i, t] of drawn.entries()) {
+      if (i % k) continue;
       out += `<text x="${n2(scale(t))}" y="${n2(y + 14)}" text-anchor="middle" `
-        + `font-size="10.5" fill="${o.muted}">${esc(f ? f(t) : t)}</text>`;
+        + `font-size="10.5" fill="${o.muted}">${esc(text[i])}</text>`;
     }
     return out;
   }
@@ -228,9 +250,15 @@
     let out = "";
     for (const [i, l] of labels.entries()) {
       const emph = o.emphasis ? !!o.emphasis(l) : false;
+      // Truncation is for the DRAWN text only; `l` stays the band key, so two labels
+      // that truncate alike still get their own rows. The full text is the hover title.
+      const full = String(l == null ? "" : l);
+      const cut = o.maxChars != null && full.length > o.maxChars;
+      const shown = cut ? full.slice(0, Math.max(1, o.maxChars - 1)) + "\u2026" : full;
       out += `<text x="${n2(x)}" y="${n2(band(l, i) + size / 3)}" text-anchor="end" `
         + `font-size="${size}"${fam}`
-        + ` fill="${emph && o.ink ? o.ink : o.muted}">${esc(l)}</text>`;
+        + ` fill="${emph && o.ink ? o.ink : o.muted}">${esc(shown)}`
+        + (cut ? `<title>${esc(full)}</title>` : "") + `</text>`;
     }
     return out;
   }
@@ -275,8 +303,14 @@
     // A detached or display:none host reports 0, which would collapse the drawing.
     const W = Math.max(320, spec.width == null ? 760 : spec.width);
     const labels = rows.map(spec.label);
-    const gutter = Math.min(220, labelWidth(labels, 10.5) + 14);
-    const valW = 86;
+    const fmtValue = spec.fmtValue || spec.fmt;
+    /* The value column is sized from the formatted values, like the label gutter.
+       It was a fixed 86, which holds 12 characters; "2,645,126,871" is 13 and drew as
+       "2,645,126,87" -- no error, a plausible number wrong by a factor of ten. 86 stays
+       as the floor so every chart whose values already fit is drawn exactly as before. */
+    const valW = Math.min(160, Math.max(86, labelWidth(
+      rows.map(spec.value).filter((v) => Number.isFinite(v)).map(fmtValue), 10.5) + 14));
+    const { gutter, maxChars } = fitGutter(labels, W, valW);
     const padT = 8, padB = 34;
     const H = padT + rows.length * rowH + padB;
     const x0 = gutter, x1 = W - valW;
@@ -291,7 +325,6 @@
     // The axis wants brevity; this column wants precision. The axis's moneyTick
     // renders $2.35B and $1.86B as "$2.4B" and "$1.9B", and the dot's position already
     // carries magnitude -- this text is the only place the exact figure appears on the chart.
-    const fmtValue = spec.fmtValue || spec.fmt;
 
     let body = "";
 
@@ -326,7 +359,7 @@
       body += zeroRule(x, padT, padT + rows.length * rowH, { ink: t.ink1 });
     }
     body += axisLeft(labels, band, gutter - 10,
-      { muted: t.ink2, ink: t.ink1, emphasis: spec.emphasis, family: spec.family });
+      { muted: t.ink2, ink: t.ink1, emphasis: spec.emphasis, family: spec.family, maxChars });
     body += axisBottom(x, padT + rows.length * rowH + 6, spec.fmt,
       { axis: t.axis, muted: t.muted, fmtPrecise: fmtValue });
     body += `<text x="${x0}" y="${H - 4}" font-size="10.5" fill="${t.muted}">`
@@ -350,7 +383,7 @@
     // A detached or display:none host reports 0, which would collapse the drawing.
     const W = Math.max(320, spec.width == null ? 760 : spec.width);
     const labels = rows.map(spec.label);
-    const gutter = Math.min(220, labelWidth(labels, 10.5) + 14);
+    const { gutter, maxChars } = fitGutter(labels, W, valW + 40);
     const padT = 8, padB = 34;
     const H = padT + rows.length * rowH + padB;
     const x0 = gutter, x1 = W - valW - 40;
@@ -368,7 +401,7 @@
         { series: t.series, sheet: t.sheet, whisker: t.whisker, tip: spec.tip(r) });
     }
     body += axisLeft(labels, band, gutter - 10,
-      { muted: t.ink2, family: t.sans });
+      { muted: t.ink2, family: t.sans, maxChars });
     body += axisBottom(x, padT + rows.length * rowH + 6, spec.fmt,
       { axis: t.axis, muted: t.muted });
     body += `<text x="${x0}" y="${H - 4}" font-size="10.5" fill="${t.muted}">`

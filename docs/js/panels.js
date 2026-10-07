@@ -252,112 +252,111 @@
         indexAxis: "y",
         plugins: {
           legend: legendOpts(false),
-                    title: { text: "Largest net senders and receivers", align: "start",
-                   padding: { bottom: 10 } },
-                   tooltip: tooltipOpts({
-                   label: c => ` ${money(c.raw)} geographic premium`,
-                   afterLabel: c => {
-                   const r = pick[c.dataIndex];
-                   return `${money(r.pymt)} total Medicare paid`;
-                   },
-                   }),
-                   },
-                   scales: {
-                   x: axisOpts("Geographic premium (paid − standardized)", v => money(v, 0)),
-                   y: axisOpts(null, null, { grid: { display: false } }),
-                   },
-                   },
-                   });
-                   
-                   document.getElementById("h1read").textContent = hero1Read(sorted);
-                   }
-                   
-                   /* Every readout below is a pure function of the view so it can be tested at
-                   cohort counts the national payload never produces. Static mode always hands
-                   these panels the full national arrays, so only live mode reaches the 1- and
-                   0-cohort branches — but the branches are chosen from the data, not from the
-                   mode, because "which mode am I in" is not something a renderer should know.
-                   
-                   The templates were written against the static payload, where nonpar_stats
-                   and the kpi block are national regardless of filter. Live mode recomputes
-                   them per filter, which is more correct and which drove the originals into
-                   sentences they were never written for: hero 1 naming one state as both
-                   extremes with a $0.00 spread between them. */
-                   const POLICY = "Geographic adjustment is deliberate Medicare policy (wages and "
-                   + "rent differ); the magnitude is what is worth seeing.";
-                   
-                   function hero1Read(sorted) {
-                   if (!sorted.length) {
-                   return "No state matches this filter, so there is no geographic premium to read.";
-                   }
-                   if (sorted.length === 1) {
-                   // A spread needs two cohorts. Naming the same state as both extremes and
-                   // reporting $0.00 between them reads as a broken calculation.
-                   const one = sorted[0];
-                   return `Reading it: this filter selects a single cohort. ${one.state} bills `
-                   + `${money(Math.abs(one.premium))} ${one.premium >= 0 ? "more" : "less"} than the `
-                   + `geographically standardized amount for the same work`
-                   // Math.abs on BOTH figures: "more"/"less" above already carries the
-                   // direction, so a signed per-beneficiary value reads as a double
-                   // negative ("bills $4.5K less … -$1.29 per beneficiary-proxy").
-                   + `${Number.isFinite(one.perBene)
-                   ? ` — ${money(Math.abs(one.perBene), 2)} per beneficiary-proxy` : ""}. `
-                   + `Comparing states needs more than one selected, so there is no spread to rank. `
-                   + POLICY;
-                   }
-                   const mx = sorted[0], mn = sorted[sorted.length - 1];
-                   return `Reading it: ${mx.state} bills ${money(mx.premium)} more than the geographically `
-                   + `standardized amount for the same work, while ${mn.state} bills `
-                   + `${money(Math.abs(mn.premium))} less — a spread of `
-                   + `${money(mx.premium - mn.premium)} attributable to location, not medicine. `
-                   + POLICY;
-                   }
-                   
-                   function hero1Ramp(drawn, bound, lo, hi) {
-                   // lo/hi come from Math.min/max over `drawn`; at zero rows they are ±Infinity,
-                   // which money() renders as an em dash rather than "$Infinity".
-                   if (!drawn.length) return "no mapped state matches this filter";
-                   if (drawn.length === 1) {
-                   // Unlike h1read this chip has no "more"/"less" to carry the direction, so
-                   // it says it in the legend's own words rather than leaning on a minus sign
-                   // ("single cohort · -$8.95 per beneficiary-proxy" was the OK/Unknown case).
-                   return `single cohort · ${money(Math.abs(lo), 2)} `
-                   + `${lo < 0 ? "below" : "above"} standard per beneficiary-proxy`;
-                   }
-                   return `scale ±${money(bound, 2)} per beneficiary-proxy · actual range `
-                   + `${money(lo, 2)} to ${money(hi, 2)} (beyond the scale is clamped)`;
-                   }
-                   
-                   /* ── HERO 2 ─────────────────────────────────────────────────────────────── */
-                   function renderHero2(view, filters) {
-                   const st = view.nonparStats;
-                   const hi = filters.spec === "all" ? null : filters.spec;
-                   // Specialties with a real non-par cohort, PLUS whichever one the filter
-                   // selected. Warn, never hide: filtering to Orthopedic Surgery must show its
-                   // +2,223% wearing a thin-sample badge, not silently drop the panel's only row.
-                   // The unselected exclusions are named in the caveat line under the chart.
-                   const ok = view.nonpar.filter(d => d.measurable || d.specialty === hi)
-                   .sort((a, b) => a.premium_pct - b.premium_pct);
-                   const forced = !!hi && view.nonpar.some(d => d.specialty === hi && !d.measurable);
-                   
-                   mount("cNonPar", {
-                   type: "bar",
-                   data: {
-                   labels: ok.map(d => d.specialty),
-                   datasets: [{
-                   label: "Patient exposure vs. participating peers",
-                   data: ok.map(d => d.premium_pct),
-                   backgroundColor: ok.map(d => hi && d.specialty !== hi
-                   ? T().grid
-                   : withAlpha(diverging(d.premium_pct > 0 ? 0.75 : -0.75),
-                   opacityFor(reliability(Number(d.n_n))))),
-                   borderWidth: 0,
-                   }],
-                   },
-                   options: {
-                   indexAxis: "y",
-                   plugins: {
-                   legend: legendOpts(false),
+          title: { text: "Largest net senders and receivers" },
+          tooltip: tooltipOpts({
+            label: c => ` ${money(c.raw)} geographic premium`,
+            afterLabel: c => {
+              const r = pick[c.dataIndex];
+              return `${money(r.pymt)} total Medicare paid`;
+            },
+          }),
+        },
+        scales: {
+          x: axisOpts("Geographic premium (paid − standardized)", v => money(v, 0)),
+          y: axisOpts(null, null, { grid: { display: false } }),
+        },
+      },
+    });
+
+    document.getElementById("h1read").textContent = hero1Read(sorted);
+  }
+
+  /* Every readout below is a pure function of the view so it can be tested at
+     cohort counts the national payload never produces. Static mode always hands
+     these panels the full national arrays, so only live mode reaches the 1- and
+     0-cohort branches — but the branches are chosen from the data, not from the
+     mode, because "which mode am I in" is not something a renderer should know.
+
+     The templates were written against the static payload, where nonpar_stats
+     and the kpi block are national regardless of filter. Live mode recomputes
+     them per filter, which is more correct and which drove the originals into
+     sentences they were never written for: hero 1 naming one state as both
+     extremes with a $0.00 spread between them. */
+  const POLICY = "Geographic adjustment is deliberate Medicare policy (wages and "
+    + "rent differ); the magnitude is what is worth seeing.";
+
+  function hero1Read(sorted) {
+    if (!sorted.length) {
+      return "No state matches this filter, so there is no geographic premium to read.";
+    }
+    if (sorted.length === 1) {
+      // A spread needs two cohorts. Naming the same state as both extremes and
+      // reporting $0.00 between them reads as a broken calculation.
+      const one = sorted[0];
+      return `Reading it: this filter selects a single cohort. ${one.state} bills `
+        + `${money(Math.abs(one.premium))} ${one.premium >= 0 ? "more" : "less"} than the `
+        + `geographically standardized amount for the same work`
+        // Math.abs on BOTH figures: "more"/"less" above already carries the
+        // direction, so a signed per-beneficiary value reads as a double
+        // negative ("bills $4.5K less … -$1.29 per beneficiary-proxy").
+        + `${Number.isFinite(one.perBene)
+            ? ` — ${money(Math.abs(one.perBene), 2)} per beneficiary-proxy` : ""}. `
+        + `Comparing states needs more than one selected, so there is no spread to rank. `
+        + POLICY;
+    }
+    const mx = sorted[0], mn = sorted[sorted.length - 1];
+    return `Reading it: ${mx.state} bills ${money(mx.premium)} more than the geographically `
+      + `standardized amount for the same work, while ${mn.state} bills `
+      + `${money(Math.abs(mn.premium))} less — a spread of `
+      + `${money(mx.premium - mn.premium)} attributable to location, not medicine. `
+      + POLICY;
+  }
+
+  function hero1Ramp(drawn, bound, lo, hi) {
+    // lo/hi come from Math.min/max over `drawn`; at zero rows they are ±Infinity,
+    // which money() renders as an em dash rather than "$Infinity".
+    if (!drawn.length) return "no mapped state matches this filter";
+    if (drawn.length === 1) {
+      // Unlike h1read this chip has no "more"/"less" to carry the direction, so
+      // it says it in the legend's own words rather than leaning on a minus sign
+      // ("single cohort · -$8.95 per beneficiary-proxy" was the OK/Unknown case).
+      return `single cohort · ${money(Math.abs(lo), 2)} `
+        + `${lo < 0 ? "below" : "above"} standard per beneficiary-proxy`;
+    }
+    return `scale ±${money(bound, 2)} per beneficiary-proxy · actual range `
+      + `${money(lo, 2)} to ${money(hi, 2)} (beyond the scale is clamped)`;
+  }
+
+  /* ── HERO 2 ─────────────────────────────────────────────────────────────── */
+  function renderHero2(view, filters) {
+    const st = view.nonparStats;
+    const hi = filters.spec === "all" ? null : filters.spec;
+    // Specialties with a real non-par cohort, PLUS whichever one the filter
+    // selected. Warn, never hide: filtering to Orthopedic Surgery must show its
+    // +2,223% wearing a thin-sample badge, not silently drop the panel's only row.
+    // The unselected exclusions are named in the caveat line under the chart.
+    const ok = view.nonpar.filter(d => d.measurable || d.specialty === hi)
+      .sort((a, b) => a.premium_pct - b.premium_pct);
+    const forced = !!hi && view.nonpar.some(d => d.specialty === hi && !d.measurable);
+
+    mount("cNonPar", {
+      type: "bar",
+      data: {
+        labels: ok.map(d => d.specialty),
+        datasets: [{
+          label: "Patient exposure vs. participating peers",
+          data: ok.map(d => d.premium_pct),
+          backgroundColor: ok.map(d => hi && d.specialty !== hi
+            ? T().grid
+            : withAlpha(diverging(d.premium_pct > 0 ? 0.75 : -0.75),
+                        opacityFor(reliability(Number(d.n_n))))),
+                        borderWidth: 0,
+        }],
+      },
+      options: {
+        indexAxis: "y",
+        plugins: {
+          legend: legendOpts(false),
           title: { text: `Specialties with at least ${st.min_nonpar_providers} `
                      + `non-participating providers`
                      + (forced ? ` · plus ${hi}, faded as a thin sample` : "") },

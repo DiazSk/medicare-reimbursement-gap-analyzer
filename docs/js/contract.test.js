@@ -143,11 +143,12 @@ test("every token read by JS is declared", () => {
 });
 
 test("the colour tokens JS reads are 6-digit hex literals", () => {
-  // format.js's hex2rgb parses 3- or 6-digit hex only, and panels.js concatenates an
-  // alpha suffix onto --series as a string. An oklch(), rgb() or 8-digit value yields
-  // rgb(NaN,NaN,NaN), which throws inside renderHero1, which detach() swallows into a
-  // console.warn -- leaving the KPI ribbon rendered and every panel below it blank,
-  // with nothing on screen saying so.
+  // panels.js concatenates an alpha suffix onto --series as a STRING for hero 5's
+  // bubbles (T().series + "b0"), and composes the choropleth's hatch patterns and the
+  // heatmap's cell fills from these literals. A 3-digit, 8-digit, oklch() or rgb()
+  // value produces something the canvas cannot parse: the mark silently disappears, or
+  // the throw lands inside a render function where detach() swallows it into a
+  // console.warn, leaving the KPI ribbon up and every panel below it blank.
   const read = [...js.matchAll(/css\("(--[a-z0-9-]+)"\)/g)].map((m) => m[1])
     .filter((t) => !t.startsWith("--font-"));
   for (const t of read) {
@@ -166,4 +167,50 @@ test("no `background` shorthand on .plate", () => {
     assert.ok(!/(^|;)\s*background\s*:/.test(m[1]),
       "a `background` shorthand in a .plate rule wipes the registration crosshairs; use longhands");
   }
+});
+
+test("every name a module destructures from window.MD is actually exported", () => {
+  /* This is the test that was missing when it mattered. panels.js referenced
+     guardrails.patternPitch and charts.hatch while neither existed, and the whole suite
+     passed 107/107 -- panels.test.js only exercises the DOM-free readouts, never a chart
+     config. On the page it showed as the KPI ribbon rendering and every panel below it
+     blank, because the TypeError landed inside a render function where detach() swallows
+     it into a console.warn. Nothing on screen said anything was wrong.
+
+     A static check is enough: the destructuring is top-level and literal in every
+     module, and the export objects are literal too. */
+  const files = fs.readdirSync(path.join(DOCS, "js"))
+    .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js") && f !== "chart.umd.min.js"
+                   && f !== "us-states.js");
+
+  // module name -> the keys it puts on window.MD
+  const exported = {};
+  for (const f of files) {
+    const src = read("js/" + f);
+    const m = src.match(/root\.MD\.(\w+)\s*=\s*\{([^}]*)\}/);
+    if (!m) continue;
+    exported[m[1]] = m[2].split(",")
+      .map((s) => s.split(":")[0].trim())
+      .filter(Boolean);
+  }
+  assert.ok(Object.keys(exported).length >= 4,
+    `expected several MD modules, found ${Object.keys(exported).join(", ")}`);
+
+  let checked = 0;
+  for (const f of files) {
+    const src = read("js/" + f);
+    // const { a, b } = root.MD.format;   /  = window.MD.charts;
+    for (const m of src.matchAll(/const\s*\{([^}]*)\}\s*=\s*(?:root|window)\.MD\.(\w+)\s*;/g)) {
+      const [, names, mod] = m;
+      assert.ok(exported[mod], `${f} destructures window.MD.${mod}, which no module exports`);
+      for (const raw of names.split(",")) {
+        const name = raw.split(":")[0].trim();
+        if (!name) continue;
+        checked++;
+        assert.ok(exported[mod].includes(name),
+          `${f} destructures "${name}" from MD.${mod}, which exports only: ${exported[mod].join(", ")}`);
+      }
+    }
+  }
+  assert.ok(checked > 5, `expected to check several imports, checked ${checked}`);
 });

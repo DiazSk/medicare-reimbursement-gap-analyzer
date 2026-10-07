@@ -4,15 +4,11 @@
 (function (root) {
   "use strict";
 
-  const { money, count, pct, inkOn, quantile } = root.MD.format;
+  const { money, count, pct, quantile } = root.MD.format;
   const { tokens, axisOpts, legendOpts, tooltipOpts, mount } = root.MD.charts;
-  const { reliability, opacityFor } = root.MD.guardrails;
-  const diverging = (t) => root.MD.format.diverging(t, tokens().div);
+  const { reliability, patternPitch } = root.MD.guardrails;
+  const { hatch } = root.MD.charts;
   const T = () => tokens();
-  // diverging() returns "rgb(r,g,b)"; the guardrail opacity rides on top of it so
-  // a thin cohort's bar is visibly weaker than a reliable one's.
-  const withAlpha = (c, a) =>
-    a >= 1 ? c : c.replace("rgb(", "rgba(").replace(")", `, ${a})`);
 
   /* A 1px --ink rule at x = 0 on the diverging bar charts. Sign is already carried by
      which side of zero a bar sits on; this just makes the datum visible, so the
@@ -36,6 +32,32 @@
       g.restore();
     },
   };
+
+  /* The selected row's band, drawn BEHIND the bars. A beforeDatasetsDraw plugin rather
+     than a ghost dataset: a dataset would appear in the legend, in the tooltip, and in
+     the stacking, and it would also have to carry a value. This draws and nothing else,
+     which is why selection can come off the bar's fill entirely.
+
+     Takes a getter, not a value: mount() builds the config once per render, and the
+     selected specialty changes between renders. */
+  const SEAL_BAND = (getSelected) => ({
+    id: "sealBand",
+    beforeDatasetsDraw(chart) {
+      const sel = getSelected();
+      if (!sel) return;
+      const y = chart.scales.y, x = chart.scales.x;
+      if (!y || !x) return;
+      const i = y.getLabels().indexOf(sel);
+      if (i < 0) return;
+      const h = Math.max(14, y.height / Math.max(1, y.getLabels().length));
+      const cy = y.getPixelForTick(i);
+      const g = chart.ctx;
+      g.save();
+      g.fillStyle = T().seal;
+      g.fillRect(x.left, cy - h / 2, x.width, h);
+      g.restore();
+    },
+  });
 
   /* ── choropleth support ─────────────────────────────────────────────────
      Geometry lives in us-states.js (us-atlas albers variant, pre-projected and
@@ -90,9 +112,26 @@
      ramp step then means magnitude on BOTH sides of zero -- eight distinguishable
      states instead of four, which is the resolution the tile map had to spend on sign.
 
-     Quantising is also a contrast fix. The old continuous ramp had a dead band where a
-     fill fails 4.5:1 against either ink, and inkOn()'s 0.4 threshold flips inside it.
-     None of the four bins lands there. */
+     Quantising is also a contrast fix, though not the one the plan described. The old
+     continuous ramp had a dead band where a fill fails 4.5:1 against EITHER ink, and
+     binning does make that band unreachable. What binning does NOT fix is the ink
+     choice: r300 is a bin, and a single luminance threshold picks white on it at
+     2.50:1. That is why the ink comes from rampInk() below and not from a threshold. */
+  /* Label ink per ramp bin, taken from the arithmetic rather than from a luminance
+     threshold. A single-threshold picker -- format.js's inkOn(), which this replaced
+     and which is now deleted -- CANNOT express this mapping: r300's relative
+     luminance is 0.3694, just under that 0.4 cutoff, so it chose white at 2.50:1
+     where --ink gives 7.11:1. Measured against each fill:
+
+       bin 0  r100   --ink 13.45:1   white  1.32:1
+       bin 1  r300   --ink  7.11:1   white  2.50:1
+       bin 2  r500   --ink  3.30:1   white  5.39:1
+       bin 3  r700   --ink  1.49:1   white 11.95:1
+
+     The plan claimed quantising made that bad band unreachable. It does not --
+     r300 IS one of the four bins, so the threshold was reachable on every load. */
+  const rampInk = (bin) => (bin <= 1 ? T().ink1 : "#ffffff");
+
   const binOf = (v, bound) => Math.min(3, Math.floor(Math.abs(v) / bound * 4));
 
   function renderChoropleth(rows, filters, bound) {
@@ -147,9 +186,8 @@
 
       if (!labelled.has(st) || !box || dim) continue;
       if (box.w > 24 && box.h > 14) {
-        // inkOn() decides the ink from the fill's own luminance. A hatched fill is
-        // mostly sheet, so it always takes the dark ink.
-        const ink = up ? inkOn(ramp[b], T().ink1, "#ffffff") : T().ink1;
+        // A hatched fill is mostly sheet, so it always takes the dark ink.
+        const ink = up ? rampInk(b) : T().ink1;
         labels.push(`<text x="${box.cx.toFixed(0)}" y="${(box.cy + 3).toFixed(0)}" `
           + `text-anchor="middle" font-size="9.5" letter-spacing=".06em" `
           + `fill="${ink}">${esc(st)}</text>`);
@@ -341,16 +379,38 @@
 
     mount("cNonPar", {
       type: "bar",
+      plugins: [ZERO_RULE, SEAL_BAND(() => hi)],
       data: {
         labels: ok.map(d => d.specialty),
         datasets: [{
           label: "Patient exposure vs. participating peers",
           data: ok.map(d => d.premium_pct),
-          backgroundColor: ok.map(d => hi && d.specialty !== hi
-            ? T().grid
-            : withAlpha(diverging(d.premium_pct > 0 ? 0.75 : -0.75),
-                        opacityFor(reliability(Number(d.n_n))))),
-                        borderWidth: 0,
+          /* Three semantics were stacked on this one fill -- sign, reliability and
+             selection -- and reliability was ALPHA, which put the two warning states at
+             2.05:1 and 1.67:1. The bars this guardrail exists to flag were the least
+             legible things on the page. Each semantic gets its own channel now:
+
+               sign         position across the zero rule, --series fill above the
+                            comparison and --whisker below. Whisker, not sheet: the
+                            negative bars ARE the finding, and a sheet fill reads as
+                            absence rather than as a result.
+               reliability  hatch pitch inside the mark (guardrails.patternPitch).
+               selection    off the mark entirely -- SEAL_BAND behind the row, plus the
+                            y-tick going to full ink.
+
+             The 1px --series border is the compliance mechanism: whatever the interior
+             does, the silhouette stays 4.03:1. Orthopedic Surgery at n=11 keeps its
+             full +2,223% bar, crisply outlined with a sparse interior -- warn, never
+             hide, and now without making the warned number harder to read. */
+          backgroundColor: (c) => {
+            const d = ok[c.dataIndex];
+            if (!d) return T().sheet;
+            const base = d.premium_pct > 0 ? T().series : T().whisker;
+            return hatch(c.chart && c.chart.ctx, base,
+                         patternPitch(reliability(Number(d.n_n))));
+          },
+          borderColor: T().series,
+          borderWidth: 1,
         }],
       },
       options: {
@@ -359,7 +419,7 @@
           legend: legendOpts(false),
           title: { text: `Specialties with at least ${st.min_nonpar_providers} `
                      + `non-participating providers`
-                     + (forced ? ` · plus ${hi}, faded as a thin sample` : "") },
+                     + (forced ? ` · plus ${hi}, hatched as a thin sample` : "") },
           tooltip: tooltipOpts({
             label: c => ` ${pct(c.raw)} ${c.raw < 0 ? "lower" : "higher"} patient exposure`,
             afterLabel: c => {
@@ -390,9 +450,12 @@
         labels: cohort.map(d => d.specialty),
         datasets: [
           { label: "Participating providers", data: cohort.map(d => d.n_y),
-            backgroundColor: T().series, borderWidth: 0 },
+            // Two categories inside one hue: solid --series against a --whisker fill
+            // behind the same --series border, so the smaller cohort reads lighter
+            // without spending a second hue or dropping its outline below 4.03:1.
+            backgroundColor: T().series, borderColor: T().series, borderWidth: 1 },
           { label: "Non-participating providers", data: cohort.map(d => d.n_n),
-            backgroundColor: T().s2, borderWidth: 0 },
+            backgroundColor: T().whisker, borderColor: T().series, borderWidth: 1 },
         ],
       },
       options: {
@@ -484,7 +547,9 @@
             backgroundColor: T().series, borderWidth: 2.2, pointRadius: 0, fill: false,
             tension: 0 },
           { label: "Perfect equality", data: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
-            showLine: true, borderColor: T().muted, borderWidth: 1.4,
+            // A reference, not a series: 1px dashed --ink-3, which is 4.72:1 where
+            // the old --ink-muted was 2.96:1 and failed.
+            showLine: true, borderColor: T().muted, borderWidth: 1,
             borderDash: [5, 4], pointRadius: 0, fill: false },
         ],
       },
@@ -510,7 +575,7 @@
       data: {
         labels: j.map(d => d.hcpcs),
         datasets: [{ label: "National Medicare payment", data: j.map(d => d.pymt),
-                     backgroundColor: T().s3, borderWidth: 0 }],
+                     backgroundColor: T().series, borderWidth: 0 }],
       },
       options: {
         indexAxis: "y",
@@ -573,37 +638,58 @@
     const rows = view.credentials.filter(d => d.shared)
       .filter(d => tiers.some(t => d[t] !== null && d[t] !== undefined))
       .sort((a, b) => a.hcpcs.localeCompare(b.hcpcs));
-    const colors = { md: T().series, np: T().s2, pa: T().s3, spec: T().s4 };
+    /* A HEATMAP, not a grouped bar chart. Four credential tiers are non-ordinal
+       categories, and the largest mutually->=3:1 subset of a single blue ramp is two
+       steps -- which is why index.html used to carry a comment admitting two of these
+       four series failed 3:1. Drawing the matrix AS a matrix removes the problem
+       instead of working around it: position carries the category, the ramp carries
+       the value, and each cell prints its own number.
 
-    mount("cCred", {
-      type: "bar",
-      data: {
-        labels: rows.map(d => d.hcpcs),
-        datasets: tiers.map(t => ({
-          label: TIER_LABELS[t], data: rows.map(d => d[t]),
-          backgroundColor: colors[t], borderWidth: 0,
-        })),
-      },
-      options: {
-        plugins: {
-          legend: legendOpts(true),
-                    title: { text: "Markup ratio on shared evaluation & management codes" },
-          tooltip: tooltipOpts({
-            title: c => {
-              const d = rows[c[0].dataIndex];
-              return `${d.hcpcs} — ${d.desc}`;
-            },
-            label: c => ` ${c.dataset.label}: ${c.raw === null ? "no data"
-              : c.raw.toFixed(2) + "x allowed amount"}`,
-          }),
-        },
-        scales: {
-          x: axisOpts("HCPCS code", null, { grid: { display: false } }),
-          y: axisOpts("Submitted charge ÷ Medicare allowed", v => v.toFixed(1) + "x",
-                      { beginAtZero: true }),
-        },
-      },
-    });
+       Rendered as a real HTML grid rather than on a canvas, so the 24 values are
+       selectable text, reachable by a screen reader through role="table", and printable.
+       #cCred is therefore a <div>, not a <canvas>; it is no longer mounted as a chart.
+
+       The plan also called for hatching thin cells, as the reference hatches n<200.
+       Not implemented, because it is not measurable here: gold_hero_credentials_markup
+       carries no per-cell provider count, only the ratio. Inventing a threshold would
+       be a guardrail that asserts something nobody measured. */
+    const cells = rows.flatMap(d => tiers.map(t => d[t]))
+      .filter(v => v !== null && v !== undefined);
+    const lo = Math.min(...cells), hi = Math.max(...cells);
+    // Span the OBSERVED range, not zero to max: every value sits between 1.66x and
+    // 2.84x, so a zero-based ramp would crush all 24 cells into the top two bins.
+    const span = hi - lo || 1;
+    const ramp = T().ramp;
+    const cellBin = (v) => Math.max(0, Math.min(3, Math.floor((v - lo) / span * 4)));
+
+    const head = `<div class="hmrow hmhead" role="row">`
+      + `<span role="columnheader">Code</span>`
+      + tiers.map(t => `<span role="columnheader">${esc(TIER_LABELS[t])}</span>`).join("")
+      + `</div>`;
+    const body = rows.map(d => `<div class="hmrow" role="row">`
+      + `<span class="hmcode" role="rowheader" title="${esc(d.desc)}">${esc(d.hcpcs)}</span>`
+      + tiers.map(t => {
+          const v = d[t];
+          if (v === null || v === undefined) {
+            return `<span class="hmcell hmna" role="cell">&mdash;</span>`;
+          }
+          const bin = cellBin(v);
+          return `<span class="hmcell" role="cell" style="background:${ramp[bin]};`
+            + `color:${rampInk(bin)}" `
+            + `title="${esc(d.hcpcs)} · ${esc(TIER_LABELS[t])} · ${v.toFixed(2)}x allowed">`
+            + `${v.toFixed(2)}x</span>`;
+        }).join("")
+      + `</div>`).join("");
+
+    document.getElementById("cCred").innerHTML = rows.length
+      ? `<div class="hm" role="table" aria-label="Markup ratio by HCPCS code and `
+        + `credential tier" style="--hmcols:${tiers.length}">${head}${body}</div>`
+        + `<div class="legend"><span class="lgroup">Submitted &divide; allowed</span>`
+        + ramp.map((c, i) => `<span class="lk"><i style="background:${c}"></i>`
+            + `${(lo + span * (i + 1) / 4).toFixed(2)}x</span>`).join("")
+        + `</div>`
+      : `<p class="empty">No shared code has coverage in more than one credential tier `
+        + `under this filter, so there is no matrix to draw.</p>`;
 
     const th = ["Code", "Description"].concat(tiers.map(t => TIER_LABELS[t]));
     document.getElementById("tCred").innerHTML =
@@ -667,7 +753,7 @@
             backgroundColor: T().series + "b0", borderColor: T().series, borderWidth: 1 },
           { label: "Equal payment in both settings", type: "line",
             data: [{ x: 0, y: 0 }, { x: lim, y: lim }],
-            borderColor: T().muted, borderWidth: 1.4, borderDash: [5, 4],
+            borderColor: T().muted, borderWidth: 1, borderDash: [5, 4],
             pointRadius: 0, fill: false },
         ],
       },
@@ -837,7 +923,7 @@
 
   root.MD = root.MD || {};
   root.MD.panels = {
-    TIER_LABELS, binOf, pathBox,
+    TIER_LABELS, binOf, pathBox, rampInk,
     renderKpis: renderStatics,   // alias: the ribbon and header render together
     renderHero1, renderHero2, renderHero3, renderHero4, renderHero5,
     renderProviders, renderStatics, geoByState,

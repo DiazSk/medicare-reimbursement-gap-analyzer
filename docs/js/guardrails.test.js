@@ -42,11 +42,15 @@ test("very thin cohorts name the CMS floor", () => {
 });
 
 test("opacity de-emphasises without hiding", () => {
-  assert.equal(G.opacityFor("ok"), 1);
-  assert.equal(G.opacityFor("thin"), 0.55);
-  assert.equal(G.opacityFor("very-thin"), 0.4);
+  assert.equal(G.patternPitch("ok"), 0, "ok is solid: pitch 0 means no hatch at all");
+  assert.equal(G.patternPitch("thin"), 7);
+  assert.equal(G.patternPitch("very-thin"), 12);
+  // A sparser interior for a thinner cohort: that ordering is the whole claim.
+  assert.ok(G.patternPitch("very-thin") > G.patternPitch("thin"),
+    "very-thin must hatch more sparsely than thin");
   // Never zero: the number must always remain visible.
-  assert.ok(G.opacityFor("very-thin") > 0);
+  // An unknown level falls back to SOLID, never to an invisible fill.
+  assert.equal(G.patternPitch("nonsense"), 0);
 });
 
 test("missing cohort size is treated as unreliable, not reliable", () => {

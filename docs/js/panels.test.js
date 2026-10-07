@@ -268,3 +268,47 @@ test("binOf clamps beyond the bound instead of indexing off the ramp", () => {
   assert.equal(P.binOf(1e9, bound), 3);
   assert.equal(P.binOf(-1e9, bound), 3);
 });
+
+test("rampInk gives every ramp bin a label ink that actually passes 4.5:1", () => {
+  /* The bug this pins: inkOn()'s single 0.4 luminance threshold picks WHITE on r300,
+     whose luminance is 0.3694, and white on r300 is 2.50:1. The plan asserted that
+     quantising made that band unreachable -- it does not, because r300 is one of the
+     four bins. Caught by computing the ratios rather than trusting the table.
+
+     Rather than hardcode the expected inks, this recomputes the contrast and asserts
+     rampInk picked the better of the two. That way it still holds if the ramp is
+     retuned. */
+  const RAMP = ["#cde2fb", "#6da7ec", "#256abf", "#0d366b"];
+  const lum = (hex) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a, b) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const INK = "#16181a", WHITE = "#ffffff";
+
+  for (let bin = 0; bin < RAMP.length; bin++) {
+    const fill = RAMP[bin];
+    const picked = P.rampInk(bin) === WHITE ? WHITE : INK;
+    const got = ratio(picked, fill);
+    const best = Math.max(ratio(INK, fill), ratio(WHITE, fill));
+    assert.ok(got >= 4.5,
+      `bin ${bin} (${fill}) label ink is ${got.toFixed(2)}:1, below AA`);
+    assert.ok(Math.abs(got - best) < 0.01,
+      `bin ${bin} (${fill}) picked the worse ink: ${got.toFixed(2)}:1 when ${best.toFixed(2)}:1 was available`);
+  }
+});
+
+test("rampInk degrades to the dark-fill ink past the end of the ramp", () => {
+  /* binOf clamps to 0..3, but a future caller might not. Asserted as a CHOICE rather
+     than as a truthy value: this harness has no document, so readTokens() never ran and
+     T().ink1 is undefined -- which is exactly the dark branch. Checking truthiness here
+     would test the harness, not the mapping. */
+  assert.equal(P.rampInk(99), P.rampInk(3),
+    "an out-of-range bin must behave like the darkest fill, not fall through to the dark ink");
+  assert.notEqual(P.rampInk(0), P.rampInk(3),
+    "bins 0 and 3 must not share an ink -- that would mean one of them fails contrast");
+});

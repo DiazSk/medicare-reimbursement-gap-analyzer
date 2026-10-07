@@ -30,8 +30,16 @@
       : `n=${shown} · below CMS's suppression floor`;
   }
 
-  const OPACITY = { ok: 1, thin: 0.55, "very-thin": 0.4 };
-  const opacityFor = (level) => OPACITY[level] ?? 1;
+  /* Reliability used to ride on OPACITY -- 1 / 0.55 / 0.4 over a coloured bar. That put
+     the two warning states at 2.05:1 and 1.67:1 against the sheet, so the bars this
+     guardrail exists to flag were the least legible things on the page. Exactly backwards.
+
+     It is a HATCH PITCH now: 0 means solid, otherwise the tile size in px, so a thinner
+     cohort gets a sparser interior. The mark keeps a 1px --series border in every state,
+     which holds the silhouette at 4.03:1 however sparse the fill -- so the warning reads
+     as a warning without making the warned number harder to see. */
+  const PATTERN_PITCH = { ok: 0, thin: 7, "very-thin": 12 };
+  const patternPitch = (level) => PATTERN_PITCH[level] ?? 0;
 
   function applyBadge(el, n) {
     if (!el) return;
@@ -42,5 +50,5 @@
   }
 
   root.MD = root.MD || {};
-  root.MD.guardrails = { RELIABLE, WEAK, reliability, badgeText, opacityFor, applyBadge };
+  root.MD.guardrails = { RELIABLE, WEAK, reliability, badgeText, patternPitch, applyBadge };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -23,44 +23,11 @@
     return (v * 100).toFixed(d ?? 1) + "%";
   }
 
-  function hex2rgb(h) {
-    h = h.replace("#", "");
-    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16),
-            parseInt(h.slice(4, 6), 16)];
-  }
-
-  // t in [-1, 1]; clamped, never extrapolated past the end stops.
-  function diverging(t, stopHexes) {
-    const stops = stopHexes.map(hex2rgb);
-    const p = (Math.max(-1, Math.min(1, t)) + 1) / 2 * (stops.length - 1);
-    const i = Math.min(stops.length - 2, Math.floor(p)), f = p - i;
-    const c = stops[i].map((v, k) => Math.round(v + (stops[i + 1][k] - v) * f));
-    return `rgb(${c[0]},${c[1]},${c[2]})`;
-  }
-
-  /* Relative luminance decides label ink, so a label stays legible at both extremes.
-     The two inks are PARAMETERS with defaults rather than CSS reads: this module is
-     deliberately DOM-free (it loads in node with no document) and format.test.js pins
-     both return values. The defaults are the design's --ink and white.
-
-     The 0.4 threshold is wrong for a continuous ramp and right for a quantised one.
-     On a continuous scale it flips at a luminance where white is only 2.50:1; the
-     four-step ramp never produces a fill in that band, which is the point of binning. */
-  function inkOn(rgb, dark, light) {
-    const [r, g, b] = rgb.match(/\d+/g).map(Number).map((v) => {
-      v /= 255;
-      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-    });
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4
-      ? (dark || "#16181a") : (light || "#ffffff");
-  }
-
   function quantile(sorted, q) {
     if (!sorted.length) return 0;
     return sorted[Math.min(sorted.length - 1, Math.round(q * (sorted.length - 1)))];
   }
 
   root.MD = root.MD || {};
-  root.MD.format = { money, count, pct, hex2rgb, diverging, inkOn, quantile };
+  root.MD.format = { money, count, pct, quantile };
 })(typeof window !== "undefined" ? window : globalThis);

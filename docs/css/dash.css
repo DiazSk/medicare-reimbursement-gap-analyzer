@@ -36,12 +36,11 @@
      light` below tells the browser not to synthesise one.
 
      Every value here that charts.js:readTokens() reads MUST stay a 6-digit hex
-     literal. format.js's hex2rgb parses 3- or 6-digit hex only, and panels.js
-     concatenates an alpha suffix onto --series as a string. An oklch(), rgb() or
-     8-digit value silently yields rgb(NaN,NaN,NaN), which throws inside renderHero1,
-     which detach() swallows -- leaving the KPI ribbon rendered and every panel below
-     it blank, with nothing on screen saying so. Modern colour syntax is fine on
-     properties JS never reads. */
+     literal. panels.js concatenates an alpha suffix onto --series as a STRING for
+     hero 5's bubbles (T().series + "b0"), so a 3-digit, 8-digit, oklch() or rgb()
+     value produces a colour the canvas cannot parse and the bubbles vanish. The ramp
+     and the hatch patterns are composed the same way. contract.test.js asserts this,
+     mutation-tested. Modern colour syntax is fine on properties JS never reads. */
   :root {
     color-scheme: light;
 
@@ -68,19 +67,6 @@
     --r300: #6da7ec;
     --r500: #256abf;
     --r700: #0d366b;
-
-    /* Still here because their call sites are: diverging() reads --div-* at six places
-       and panels.js reads --series-2/3/4 at four. Both sets go when those encodings
-       change; repointing them at blue now would collapse hero 4's four credential tiers
-       into four near-identical blues. */
-    --series-2: #eb6834;
-    --series-3: #1baf7a;
-    --series-4: #eda100;
-    --div-neg2: #184f95;
-    --div-neg1: #6da7ec;
-    --div-mid:  #f0efec;
-    --div-pos1: #e87272;
-    --div-pos2: #b02525;
 
     --seal: #dcddf3;   /* ink on seal 13.29:1 */
     --bar: 60px;
@@ -269,6 +255,25 @@
      smaller swatch, which is the whole reason the legend exists. */
   .lk i { width: 16px; height: 11px; border: 1px solid var(--ink-3);
     display: inline-block; flex: 0 0 auto; }
+
+  /* Hero 4's matrix. A grid, not a canvas: 24 selectable numbers, reachable through
+     role="table", and it prints. Position carries the credential tier, the ramp carries
+     the value, and each cell prints its own number -- which is what let the four
+     non-ordinal tiers off a single-hue ramp that can only resolve two steps. */
+  .hm { display: grid; gap: 1px; margin-top: 6px;
+    font-variant-numeric: tabular-nums; }
+  .hmrow { display: grid; gap: 1px;
+    grid-template-columns: 86px repeat(var(--hmcols, 4), 1fr); }
+  .hmhead span { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-3); padding: 6px 8px; text-align: center; }
+  .hmhead span:first-child { text-align: left; }
+  .hmcode { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2);
+    display: flex; align-items: center; padding: 0 8px; }
+  .hmcell { display: flex; align-items: center; justify-content: center;
+    padding: 13px 8px; font-size: 13px; font-weight: 550;
+    border: 1px solid var(--ink-3); }
+  /* A no-data cell must not read as a low value: sheet ground, --ink-3 em dash. */
+  .hmcell.hmna { background: var(--sheet); color: var(--ink-3); font-weight: 400; }
 
   /* tables */
   table { width: 100%; border-collapse: collapse; font-size: 13px;

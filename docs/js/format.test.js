@@ -36,20 +36,6 @@ test("pct scales by 100 with configurable precision", () => {
   assert.equal(F.pct(null), "—");
 });
 
-test("diverging clamps out-of-range inputs instead of extrapolating", () => {
-  const stops = ["#184f95", "#6da7ec", "#f0efec", "#e87272", "#b02525"];
-  assert.equal(F.diverging(-5, stops), F.diverging(-1, stops));
-  assert.equal(F.diverging(5, stops), F.diverging(1, stops));
-  assert.match(F.diverging(0, stops), /^rgb\(\d+,\d+,\d+\)$/);
-});
-
-test("inkOn picks dark ink on light fills and light ink on dark fills", () => {
-  assert.equal(F.inkOn("rgb(255,255,255)"), "#16181a");   // the design's --ink
-  assert.equal(F.inkOn("rgb(0,0,0)", "#111", "#eee"), "#eee");
-  assert.equal(F.inkOn("rgb(255,255,255)", "#111", "#eee"), "#111");
-  assert.equal(F.inkOn("rgb(0,0,0)"), "#ffffff");
-});
-
 test("quantile indexes a pre-sorted array and clamps at the ends", () => {
   const xs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   assert.equal(F.quantile(xs, 0), 1);

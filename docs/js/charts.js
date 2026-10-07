@@ -36,17 +36,13 @@
     // `critical` is gone: it was read on every repaint and consumed by nothing.
     // `grid` and `axis` now resolve to the same hairline; both keys stay because
     // axisOpts uses them in different slots.
+    patternCache = {};   // a cached pattern still holds the OLD colour
     T = {
       ink1: css("--ink"), ink2: css("--ink-2"), muted: css("--ink-3"),
       grid: css("--hair"), axis: css("--hair"), hair: css("--hair"),
       sheet: css("--sheet"), surface: css("--sheet"), sans: css("--font-sans"),
       series: css("--series"), whisker: css("--whisker"), seal: css("--seal"),
       ramp: [css("--r100"), css("--r300"), css("--r500"), css("--r700")],
-      // Retained only until their call sites go in the encoding commits: s2/s3/s4
-      // are read at four places and div by diverging() at six.
-      s2: css("--series-2"), s3: css("--series-3"), s4: css("--series-4"),
-      div: [css("--div-neg2"), css("--div-neg1"), css("--div-mid"),
-            css("--div-pos1"), css("--div-pos2")],
     };
     return T;
   }
@@ -62,6 +58,41 @@
     borderColor: T.series,
     borderWidth: 1,
   });
+
+
+  /* A 45-degree hatch as a CanvasPattern, for marks whose interior carries reliability.
+     pitch 0 returns the flat colour, so callers need no branch.
+
+     Cached per colour+pitch: Chart.js asks for backgroundColor once per bar per repaint
+     and every filter change repaints, so a fresh offscreen canvas each time would churn
+     dozens per keystroke. readTokens() clears the cache, because a cached pattern is
+     painted in the OLD colour.
+
+     Three strokes, not one: a single corner-to-corner line leaves the tile's two outer
+     triangles blank, so the repeat shows gaps instead of a continuous hatch. */
+  let patternCache = {};
+
+  function hatch(ctx, colour, pitch) {
+    if (!pitch) return colour;
+    if (!ctx || typeof document === "undefined") return colour;
+    const key = colour + "|" + pitch;
+    if (patternCache[key]) return patternCache[key];
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = pitch;
+    const g = tile.getContext("2d");
+    g.fillStyle = T.sheet || "#ffffff";
+    g.fillRect(0, 0, pitch, pitch);
+    g.strokeStyle = colour;
+    g.lineWidth = 2;
+    for (const off of [-pitch, 0, pitch]) {
+      g.beginPath();
+      g.moveTo(off, pitch - off);
+      g.lineTo(pitch + off, -off);
+      g.stroke();
+    }
+    patternCache[key] = ctx.createPattern(tile, "repeat");
+    return patternCache[key];
+  }
 
   function axisOpts(title, fmt, extra) {
     // `callback: fmt` with fmt === null does NOT fall back to Chart.js's own
@@ -105,5 +136,5 @@
   }
 
   root.MD = root.MD || {};
-  root.MD.charts = { readTokens, tokens, axisOpts, legendOpts, tooltipOpts, mount, charts, hollow };
+  root.MD.charts = { readTokens, tokens, axisOpts, legendOpts, tooltipOpts, mount, charts, hollow, hatch };
 })(window);

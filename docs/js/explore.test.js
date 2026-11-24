@@ -418,3 +418,19 @@ test("a height-only resize does not repaint", async () => {
   }
 });
 
+test("a count axis labels a fractional tick truthfully, not by rounding it", () => {
+  /* niceTicks on a narrow count domain gives 3, 3.5, 4, 4.5, 5. count() renders
+     those as 3, 4, 4, 5, 5 -- a tick labelled 4 that sits at 3.5. The value column
+     keeps count(), because a datum really is a whole number of services. */
+  const { MEASURES } = load();
+  for (const key of ["svcs", "benes"]) {
+    const m = MEASURES.find((x) => x.key === key);
+    assert.ok(m.axisFmt, `${key} has no axisFmt, so its axis rounds`);
+    assert.equal(m.axisFmt(3.5), "3.5", `${key} axis must not round 3.5 to 4`);
+    assert.equal(m.axisFmt(1500000), "1,500,000", `${key} axis keeps grouping`);
+    // m.format still rounds, which is right for a datum -- format.test.js pins
+    // count() itself, and load()'s stub has no real MD.format to call here.
+    assert.ok(m.format, `${key} kept its value-column formatter`);
+  }
+});
+

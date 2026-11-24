@@ -725,7 +725,18 @@
 
     // Both directions on one signed axis -- showing only the positive tail is
     // how the original "savings" framing went wrong.
+    /* The two slices are the largest and smallest savings of the SAME array, so a
+       cohort with fewer than 16 codes puts one code in both. scaleBand's index-aware
+       band draws it twice, same value, with contradictory tip notes -- "facility
+       costs more" above "office costs more". De-dup by code; a live filter can
+       easily return a short list. */
+    const seenCode = new Set();
     const bar = view.siteBarNeg.slice(0, 8).concat(view.siteBarPos.slice(0, 8))
+      .filter((d) => {
+        if (seenCode.has(d.hcpcs)) return false;
+        seenCode.add(d.hcpcs);
+        return true;
+      })
       .sort((a, b) => (b.savings || 0) - (a.savings || 0));
     mountSvg("cSiteBar", "Largest differentials, both directions", {
       rows: bar,

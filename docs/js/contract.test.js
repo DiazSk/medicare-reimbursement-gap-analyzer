@@ -365,3 +365,39 @@ test("the findings page repaints its charts when the width changes", () => {
     "the repaint must be debounced and reuse the last view, never re-query");
 });
 
+test("every page loads its modules in dependency order", () => {
+  /* Script order IS the dependency graph here. A module that destructures
+     root.MD.<name> at IIFE time needs that module already evaluated; moving
+     js/format.js below js/panels.js throws "Cannot destructure property 'money'",
+     window.MD.panels is never assigned, and every panel renders blank -- while the
+     whole suite still passes. Nothing tested this.
+
+     Derived from the source, not a hardcoded list: add a top-level destructure and
+     this test demands the ordering. Modules that read siblings through lazy getters
+     (live.js, explore.js) have no load-time requirement and are not constrained. */
+  const jsFiles = fs.readdirSync(path.join(DOCS, "js"))
+    .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js"));
+
+  const needs = {};
+  for (const f of jsFiles) {
+    needs[f] = [...read("js/" + f)
+      .matchAll(/^ {2}const\s*\{[^}]*\}\s*=\s*root\.MD\.(\w+)\s*;/gm)]
+      .map((m) => m[1] + ".js");
+  }
+  assert.ok(Object.values(needs).some((v) => v.length),
+    "no load-time destructure found at all -- the regex has drifted");
+
+  for (const [name, html] of [["index.html", index], ["explore.html", explore]]) {
+    const order = [...html.matchAll(/<script src="js\/([\w.-]+\.js)/g)].map((m) => m[1]);
+    for (const [i, file] of order.entries()) {
+      for (const dep of needs[file] || []) {
+        const at = order.indexOf(dep);
+        if (at === -1) continue;   // not on this page; the import test covers that
+        assert.ok(at < i,
+          `${name}: ${file} destructures root.MD from ${dep} at load time, ` +
+          `but ${dep} is loaded after it -- the page will render blank`);
+      }
+    }
+  }
+});
+

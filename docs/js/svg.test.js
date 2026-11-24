@@ -778,3 +778,54 @@ test("axis ticks are thinned until neighbours clear each other, and only then", 
     { fmt: (v) => v.toLocaleString("en-US") }));
   assert.ok(wide.length > narrow.length, "a wide chart keeps every tick");
 });
+
+/* ---- a broken domain must not draw a confident wrong picture ---- */
+
+test("scaleLog with a NaN bound refuses to place marks instead of stacking them", () => {
+  /* Math.max(1, NaN) is NaN and !(hi > NaN) is true, so this used to take the
+     degenerate branch: every input returned the range midpoint. The result was a
+     clean, legible chart asserting that every cohort is equal -- finite numbers, no
+     NaN in the markup, nothing thrown. The worst failure this codebase can have. */
+  const bad = S.scaleLog([NaN, 1000], [0, 400]);
+  const at = [1, 10, 1000].map(bad);
+  assert.ok(!at.every((v) => v === at[0]),
+    `every input mapped to ${at[0]} -- the chart would claim all cohorts are equal`);
+  assert.ok(at.every((v) => Number.isNaN(v)), "a refusing scale must return NaN");
+  assert.deepEqual(bad.ticks(), [], "a broken domain must label nothing");
+});
+
+test("scaleLinear with a NaN bound also refuses, and both scales agree", () => {
+  const bad = S.scaleLinear([0, NaN], [0, 400]);
+  assert.ok(Number.isNaN(bad(10)) && Number.isNaN(bad(100)));
+  assert.deepEqual(bad.ticks(5), []);
+});
+
+test("a finite domain is untouched by the guard", () => {
+  // The guard must not cost the ordinary case its degenerate-domain behaviour.
+  assert.equal(S.scaleLinear([5, 5], [0, 400])(5), 200, "zero-width still centres");
+  assert.equal(S.scaleLog([1, 1], [0, 400])(1), 200);
+  assert.equal(S.scaleLinear([0, 100], [0, 400])(50), 200);
+});
+
+test("an axis never prints the same label twice", () => {
+  /* fmtPrecise only helps when a second, finer formatter exists. The explorer
+     passes one function for both, so a count axis on a narrow range rendered
+     "3 4 4 5 5": two ticks at different positions both labelled 4. That is not an
+     imprecise reading, it is a false one. */
+  const x = S.scaleLinear([3, 5], [0, 400]);
+  x.ticks = () => [3, 3.5, 4, 4.5, 5];
+  const out = S.axisBottom(x, 100, (v) => String(Math.round(v)),
+    { axis: "#000", muted: "#666" });
+  const labels = [...out.matchAll(/text-anchor="middle"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  assert.deepEqual(labels, [...new Set(labels)], `repeated labels: ${labels}`);
+  assert.deepEqual(labels, ["3", "4", "5"]);
+});
+
+test("suppressing repeats does not thin an axis whose labels already differ", () => {
+  const x = S.scaleLinear([0, 400], [0, 400]);
+  x.ticks = () => [0, 100, 200, 300, 400];
+  const out = S.axisBottom(x, 100, (v) => String(v), { axis: "#000", muted: "#666" });
+  const labels = [...out.matchAll(/text-anchor="middle"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  assert.deepEqual(labels, ["0", "100", "200", "300", "400"]);
+});
+

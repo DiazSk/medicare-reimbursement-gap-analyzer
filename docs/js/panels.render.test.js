@@ -213,3 +213,32 @@ test("a heatmap cell's tip names its code, its ratio and its tier", () => {
   assert.match(value, /^\d+\.\d{2}x allowed$/, `value should be the ratio, got "${value}"`);
   assert.ok(note.length > 2, `note should be the credential tier, got "${note}"`);
 });
+
+test("cSiteBar draws each HCPCS once, even when the two slices overlap", () => {
+  /* siteBarPos and siteBarNeg are the largest and smallest savings of the SAME
+     array. A cohort with fewer than 16 codes puts a code in both, and scaleBand's
+     index-aware band then drew it twice: same value, same position in the ordering,
+     with contradictory tip notes -- "facility costs more" above "office costs
+     more". A live filter can easily return a list this short. */
+  const few = [
+    { hcpcs: "11111", savings: 900, desc: "a", f_pymt: 9, o_pymt: 1, f_svcs: 5, ratio: 9 },
+    { hcpcs: "22222", savings: 400, desc: "b", f_pymt: 4, o_pymt: 1, f_svcs: 4, ratio: 4 },
+    { hcpcs: "33333", savings: -700, desc: "c", f_pymt: 1, o_pymt: 8, f_svcs: 3, ratio: 0.2 },
+  ];
+  const bySav = (a, b) => b.savings - a.savings;
+  const overlapping = Object.assign({}, view, {
+    siteBarPos: few.slice().sort(bySav),
+    siteBarNeg: few.slice().sort((a, b) => a.savings - b.savings),
+  });
+
+  P.renderHero5(overlapping);
+  const html = hosts.cSiteBar.innerHTML;
+  for (const code of ["11111", "22222", "33333"]) {
+    const n = (html.match(new RegExp(`data-tip-label="${code}"`, "g")) || []).length;
+    assert.equal(n, 1, `${code} was drawn ${n} times`);
+  }
+  // and the real payload is unaffected
+  P.renderHero5(view);
+  assert.ok(hosts.cSiteBar.innerHTML.includes("<svg"), "the real cohort still draws");
+});
+

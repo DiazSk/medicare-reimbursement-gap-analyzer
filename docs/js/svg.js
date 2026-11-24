@@ -24,13 +24,25 @@
   /* A zero-width domain is not an error, it is a one-cohort filter. Returning the
      range midpoint keeps the mark on screen and centred; returning NaN would
      produce d="MNaN,NaN", which renders nothing and throws nothing. */
+  /* A non-finite bound makes the scale refuse to place anything: f returns NaN and
+     ticks() is empty. Live mode can hand a scale a domain built from a missing
+     field, and the alternative is worse than a broken-looking chart. scaleLog in
+     particular used to answer the SAME x for every input on a NaN bound -- a clean,
+     legible chart asserting that every cohort is equal, with no NaN in the markup
+     and nothing thrown. A mark that does not draw is visibly wrong; a confident
+     wrong picture is not. */
+  const finiteDomain = (d) => Number.isFinite(d[0]) && Number.isFinite(d[1]);
+
   function scaleLinear(domain, range) {
     const d0 = domain[0], d1 = domain[1], r0 = range[0], r1 = range[1];
+    const ok = finiteDomain(domain);
     const span = d1 - d0;
-    const f = (v) => (span === 0 ? (r0 + r1) / 2 : r0 + ((v - d0) / span) * (r1 - r0));
+    const f = (v) => (!ok ? NaN
+      : span === 0 ? (r0 + r1) / 2
+      : r0 + ((v - d0) / span) * (r1 - r0));
     f.domain = domain;
     f.range = range;
-    f.ticks = (n) => niceTicks(d0, d1, n == null ? 5 : n);
+    f.ticks = (n) => (ok ? niceTicks(d0, d1, n == null ? 5 : n) : []);
     return f;
   }
 
@@ -39,12 +51,16 @@
      returns the range midpoint, matching scaleLinear -- two sibling scales must not
      disagree about their degenerate case. */
   function scaleLog(domain, range) {
+    const ok = finiteDomain(domain);
     const lo = Math.max(1, domain[0]);
     const hi = Math.max(1, domain[1]);
-    const flat = !(hi > lo);
+    // `flat` must not absorb a NaN bound: !(hi > NaN) is true, which is how a
+    // broken domain used to collapse every mark onto the range midpoint.
+    const flat = ok && !(hi > lo);
     const l0 = Math.log(lo), l1 = Math.log(hi);
     const r0 = range[0], r1 = range[1];
     const f = (v) => {
+      if (!ok) return NaN;
       if (flat) return (r0 + r1) / 2;
       const lv = Math.log(Math.max(1, v || 1));
       return r0 + ((lv - l0) / (l1 - l0)) * (r1 - r0);
@@ -54,6 +70,7 @@
     /* Decade ticks. WITHOUT these, a consumer that asks a scale for its ticks gets
        an empty array and the axis renders with no labels at all. */
     f.ticks = () => {
+      if (!ok) return [];
       if (flat) return [lo];
       const out = [];
       for (let d = Math.pow(10, Math.floor(Math.log10(lo))); d <= hi; d *= 10) {
@@ -254,8 +271,16 @@
     const text = drawn.map((t) => String(f ? f(t) : t));
     const gap = drawn.length > 1 ? Math.abs(scale(drawn[1]) - scale(drawn[0])) : Infinity;
     const k = Math.max(1, Math.ceil((labelWidth(text, 10.5) + 8) / gap));
+    /* And never print one label twice. fmtPrecise above only helps when a SECOND,
+       finer formatter exists; the explorer passes the same function for both, so a
+       count axis on a narrow range rendered "3 4 4 5 5" -- two ticks at different
+       positions both labelled 4, which is not an imprecise reading but a false one.
+       Dropping the repeat leaves a sparser axis that is at least true. */
+    let prevLabel = null;
     for (const [i, t] of drawn.entries()) {
       if (i % k) continue;
+      if (text[i] === prevLabel) continue;
+      prevLabel = text[i];
       out += `<text x="${n2(scale(t))}" y="${n2(y + 14)}" text-anchor="middle" `
         + `font-size="10.5" fill="${o.muted}">${esc(text[i])}</text>`;
     }

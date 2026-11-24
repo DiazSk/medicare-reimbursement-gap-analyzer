@@ -38,8 +38,17 @@
       axisFmt: (v) => F().moneyTick(v) },
     { key: "alowd",  label: "Medicare allowed",  sql: "SUM(Tot_Mdcr_Alowd_Amt_sum)", format: (v) => F().money(v),
       axisFmt: (v) => F().moneyTick(v) },
-    { key: "svcs",   label: "Services",          sql: "SUM(Tot_Srvcs_sum)",          format: (v) => F().count(v) },
-    { key: "benes",  label: "Beneficiary proxy", sql: "SUM(Tot_Benes_sum)",          format: (v) => F().count(v) },
+    /* count() rounds to whole units, which is right for a datum and wrong for an
+       axis: a narrow domain ticks at 3, 3.5, 4, 4.5, 5 and count() labels them
+       3, 4, 4, 5, 5 -- a tick labelled 4 sitting at 3.5. axisBottom drops the
+       repeat, but it keeps the first of each run, so the survivor is the one in
+       the wrong place. A tick is a position on a continuous scale, so let it
+       carry its half: "3.5" is true where "4" is not. Large domains never reach
+       a fraction and are unchanged. */
+    { key: "svcs",   label: "Services",          sql: "SUM(Tot_Srvcs_sum)",          format: (v) => F().count(v),
+      axisFmt: (v) => v.toLocaleString("en-US", { maximumFractionDigits: 1 }) },
+    { key: "benes",  label: "Beneficiary proxy", sql: "SUM(Tot_Benes_sum)",          format: (v) => F().count(v),
+      axisFmt: (v) => v.toLocaleString("en-US", { maximumFractionDigits: 1 }) },
     // `ratio: true` marks the two measures where SUM/SUM can divide two tiny
     // numbers at a fine grain (one rare procedure code, a near-zero allowed
     // amount) and produce an arithmetically correct but startling-looking

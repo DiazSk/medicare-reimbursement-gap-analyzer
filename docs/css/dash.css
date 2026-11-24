@@ -325,6 +325,10 @@
      toggle all come free -- no JS and no new id. The summary is styled as the
      reference's square button. */
   .showtbl { margin-top: 14px; }
+  /* Hero 3's toggle holds two tables, so each needs saying which is which. */
+  .tcap { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--ink-3); margin: 14px 0 6px; }
+  .showtbl > .tcap:first-of-type { margin-top: 10px; }
   .showtbl > summary { display: inline-block; cursor: pointer; list-style: none;
     font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase;
     letter-spacing: 0.1em; padding: 7px 11px; color: var(--ink);

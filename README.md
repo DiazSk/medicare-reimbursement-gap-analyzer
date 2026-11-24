@@ -2,7 +2,7 @@
 
 **9.66 million Medicare claims → a Bronze/Silver/Gold lakehouse → a dashboard that runs SQL over every row in your browser.**
 
-### ⟶ **[Open the live dashboard](https://diazsk.github.io/healthcare-lakehouse-azure/)** · **[Query the data yourself](https://diazsk.github.io/healthcare-lakehouse-azure/explore.html)**
+### ⟶ **[Open the live dashboard](https://diazsk.github.io/medicare-reimbursement-gap-analyzer/)** · **[Query the data yourself](https://diazsk.github.io/medicare-reimbursement-gap-analyzer/explore.html)**
 
 **Pipeline** `PySpark 3.5` · `Delta Lake` · `Azure Databricks` · `ADLS Gen2` · `Azure Data Factory` · `Key Vault` · `Microsoft Entra ID` · `Terraform` · `Python 3.11` · `SQL` · `Parquet`<br>
 **Serving** `DuckDB` · `DuckDB-WASM` · `WebAssembly` · `Chart.js` · `Power BI` · `marimo` · `Plotly`

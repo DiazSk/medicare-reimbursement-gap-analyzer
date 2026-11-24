@@ -242,3 +242,28 @@ test("cSiteBar draws each HCPCS once, even when the two slices overlap", () => {
   assert.ok(hosts.cSiteBar.innerHTML.includes("<svg"), "the real cohort still draws");
 });
 
+test("the Lorenz table's top-N rows agree with the KPI ribbon", () => {
+  /* Deriving the top-1% share from the plotted series lands on the nearest x,
+     0.98995 rather than 0.99, and renders 49.0% where the ribbon two screens up
+     says 48.9%. A text equivalent that disagrees with the figure it stands in for
+     is worse than none. The top-N rows come from the payload; only the bottom-N
+     rows are read off the curve. */
+  P.renderHero3(view);
+  const cells = [...hosts.tLorenz.innerHTML.split("<tr>").slice(2)]
+    .map((r) => [...r.matchAll(/<td[^>]*>([^<]*)</g)].map((m) => m[1]))
+    .filter((c) => c.length >= 2);
+  const row = (label) => (cells.find((c) => c[0] === label) || [])[1];
+
+  for (const [label, key] of [["Top 1%", "lorenz_top1"],
+                              ["Top 5%", "lorenz_top5"],
+                              ["Top 10%", "lorenz_top10"]]) {
+    assert.equal(row(label), (DATA.kpi[key] * 100).toFixed(1) + "%",
+      `${label} must render the payload's ${key}, not a value re-derived from the curve`);
+  }
+
+  // The two sources meet in the middle: bottom 90% and top 10% are complements.
+  const b90 = parseFloat(row("Bottom 90%")), t10 = parseFloat(row("Top 10%"));
+  assert.ok(Math.abs(b90 + t10 - 100) < 0.15,
+    `bottom 90% (${b90}) and top 10% (${t10}) should sum to 100`);
+});
+

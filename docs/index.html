@@ -8,7 +8,7 @@
 <!-- No charting library: every chart is hand-drawn SVG from js/svg.js. The static narrative
      has zero external dependencies. DuckDB still comes from jsdelivr, but only on demand,
      and explore mode degrades politely without it. -->
-<link rel="stylesheet" href="css/dash.css?v=9b9e3f48">
+<link rel="stylesheet" href="css/dash.css?v=29f09f64">
 </head>
 <body>
 <header class="bar"><div class="wrap">
@@ -97,6 +97,10 @@
     </div>
     <div class="chartbox tall" id="cGeo"></div>
   </div>
+  <details class="showtbl">
+    <summary>Show table</summary>
+    <div class="tblwrap"><table id="tGeo"></table></div>
+  </details>
   <p class="read" id="h1read"></p>
   <div class="pcap"><span>Pl. I &middot; Geographic premium per beneficiary-proxy &middot; Unit: state</span><span class="src">Source <code>gold_hero_geo_arbitrage</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 3</span></div>
 </section>
@@ -117,6 +121,10 @@
     <div class="chartbox tall" id="cNonPar"></div>
     <div class="chartbox tall" id="cNonParAbs"></div>
   </div>
+  <details class="showtbl">
+    <summary>Show table</summary>
+    <div class="tblwrap"><table id="tNonPar"></table></div>
+  </details>
   <p class="read" id="h2read"></p>
   <p class="read callout" id="h2caveat"></p>
   <div class="pcap"><span>Pl. II &middot; Non-participation premium by specialty &middot; Unit: specialty</span><span class="src">Source <code>gold_hero_non_par_premium</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 5</span></div>
@@ -134,6 +142,13 @@
     <div class="chartbox" id="cLorenz"></div>
     <div class="chartbox" id="cJcode"></div>
   </div>
+  <details class="showtbl">
+    <summary>Show tables</summary>
+    <p class="tcap">Share of drug spend held by the lowest-billing prescribers.</p>
+    <div class="tblwrap"><table id="tLorenz"></table></div>
+    <p class="tcap">Largest drug codes by Medicare payment.</p>
+    <div class="tblwrap"><table id="tJcode"></table></div>
+  </details>
   <p class="read" id="h3read"></p>
   <div class="pcap"><span>Pl. III &middot; Drug-spend concentration &middot; Unit: provider (NPI)</span><span class="src">Source <code>gold_hero_jcode_concentration</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 7</span></div>
 </section>
@@ -171,6 +186,10 @@
     <div class="chartbox tall" id="cSite"></div>
     <div class="chartbox tall" id="cSiteBar"></div>
   </div>
+  <details class="showtbl">
+    <summary>Show table</summary>
+    <div class="tblwrap"><table id="tSite"></table></div>
+  </details>
   <p class="read" id="h5read"></p>
   <p class="read callout" id="h5caveat"></p>
   <div class="pcap"><span>Pl. V &middot; Site-of-service differential &middot; Unit: HCPCS</span><span class="src">Source <code>gold_hero_site_neutral</code> &middot; <code>04_gold_hero_marts.ipynb</code> cell 11</span></div>
@@ -276,7 +295,7 @@
 <script src="js/guardrails.js?v=b1c99f3b"></script>
 <script src="js/us-states.js?v=13104246"></script>
 <script src="js/svg.js?v=8ec4c82e"></script>
-<script src="js/panels.js?v=e910d5a4"></script>
+<script src="js/panels.js?v=57340ad3"></script>
 <script src="js/tip.js?v=3ca8d159"></script>
 <!-- engine.js and live.js load before the boot script rather than after it, so
      the toggle can bind window.MD.live at parse time instead of lazily. -->

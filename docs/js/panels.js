@@ -30,6 +30,32 @@
      build bespoke SVG (hero 3's Lorenz curve, hero 5's scatter) take no spec object
      and read their host directly; generalising further for two callers that share no
      shape would be inventing a framework. */
+  /* The text equivalent behind each plate's SHOW TABLE toggle.
+
+     frame() marks every chart role="img", so a chart's marks are presentational
+     and a screen reader gets one sentence for the whole figure. For a long time
+     only hero 4 had a table, while a comment in svg.js claimed "the SHOW TABLE
+     toggles" covered the rest. They did not exist. These are them.
+
+     Each table follows its chart's filters: a table showing a different cohort
+     than the chart beside it would be worse than no table at all. */
+  function staticTable(id, cols, rows) {
+    const host = document.getElementById(id);
+    if (!host) { console.warn(`staticTable: no element #${id}`); return; }
+    if (!rows.length) {
+      host.innerHTML = '<tbody><tr><td class="l">No rows under this filter.</td></tr></tbody>';
+      return;
+    }
+    host.innerHTML =
+      `<thead><tr>${cols.map((c) =>
+        `<th class="${c.left ? "l" : ""}" style="cursor:default">${esc(c.h)}</th>`
+      ).join("")}</tr></thead>`
+      + `<tbody>${rows.map((r) => `<tr>${cols.map((c) =>
+          `<td class="${c.left ? "l" : ""}">${esc(c.get(r))}</td>`
+        ).join("")}</tr>`).join("")}</tbody>`;
+  }
+
+
   function mountSvg(id, title, spec, renderer) {
     const host = document.getElementById(id);
     if (!host) {
@@ -243,6 +269,13 @@
     const hi = drawn.length ? Math.max(...drawn.map(r => r.perBene)) : -Infinity;
 
     renderChoropleth(rows, filters, bound);
+
+    staticTable("tGeo", [
+      { h: "State", left: true, get: (r) => r.state },
+      { h: "Per beneficiary-proxy", get: (r) => (r.perBene === null ? "—" : money(r.perBene, 2)) },
+      { h: "Geographic premium", get: (r) => money(r.premium) },
+      { h: "Medicare paid", get: (r) => money(r.pymt) },
+    ], rows.slice().sort((a, b) => (b.perBene || 0) - (a.perBene || 0)));
     document.getElementById("ramp").innerHTML = hero1Legend(rows, bound);
     document.getElementById("rampScale").textContent = hero1Ramp(drawn, bound, lo, hi);
 
@@ -391,6 +424,17 @@
       legend: ["Participating providers", "Non-participating providers"],
     }, "dumbbellPlot");
 
+    staticTable("tNonPar", [
+      { h: "Specialty", left: true, get: (d) => d.specialty },
+      { h: "Patient exposure", get: (d) => pct(d.premium_pct) },
+      { h: "Participating $/benef.", get: (d) => money(d.exp_y, 2) },
+      { h: "Non-participating $/benef.", get: (d) => money(d.exp_n, 2) },
+      { h: "Participating providers", get: (d) => count(d.n_y) },
+      { h: "Non-participating", get: (d) => count(d.n_n) },
+      // The threshold the chart encodes as filled-vs-hollow, said in words.
+      { h: "Cohort", left: true, get: (d) => (d.measurable ? "At or above threshold" : "Thin") },
+    ], ok);
+
     document.getElementById("h2read").textContent = hero2Read(view);
     document.getElementById("h2caveat").textContent = hero2Caveat(view);
   }
@@ -528,6 +572,40 @@
       tip: (d) => ({ label: d.hcpcs, value: money(d.pymt),
                      note: `${count(d.providers)} providers` }),
     });
+
+    /* The curve is 200 cumulative points; a dozen carry its meaning.
+
+       The bottom-N rows are read off the plotted series, so the table cannot drift
+       from the line above it. The top-N rows are NOT derived: the payload carries
+       lorenz_top1/5/10, and deriving them lands on the nearest plotted x instead of
+       the exact one -- 0.98995 rather than 0.99, which renders the headline figure
+       as 49.0% against the 48.9% in the KPI ribbon two screens up. Two different
+       numbers for one claim is exactly what a text equivalent must not introduce. */
+    const atShare = (share) => {
+      let best = pts[0];
+      for (const q of pts) if (Math.abs(q.x - share) < Math.abs(best.x - share)) best = q;
+      return best;
+    };
+    const k = view.kpi || {};
+    const deciles = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+      .map((d) => ({ label: `Bottom ${pct(d, 0)}`, y: atShare(d).y }))
+      .concat([
+        { label: "Top 10%", y: k.lorenz_top10 },
+        { label: "Top 5%", y: k.lorenz_top5 },
+        { label: "Top 1%", y: k.lorenz_top1 },
+      ].filter((r) => r.y != null));
+
+    staticTable("tLorenz", [
+      { h: "Share of prescribers", left: true, get: (r) => r.label },
+      { h: "Share of drug spend", get: (r) => pct(r.y) },
+    ], deciles);
+
+    staticTable("tJcode", [
+      { h: "HCPCS", left: true, get: (d) => d.hcpcs },
+      { h: "Description", left: true, get: (d) => String(d.desc || "").slice(0, 58) },
+      { h: "Medicare paid", get: (d) => money(d.pymt) },
+      { h: "Providers", get: (d) => count(d.providers) },
+    ], view.jcodeTop);
 
     document.getElementById("h3read").textContent = hero3Read(view);
   }
@@ -754,6 +832,18 @@
         note: d.desc,
       }),
     });
+
+    /* The full scatter, which is also the superset cSiteBar draws its 16 from. */
+    staticTable("tSite", [
+      { h: "HCPCS", left: true, get: (d) => d.hcpcs },
+      { h: "Description", left: true, get: (d) => String(d.desc || "").slice(0, 48) },
+      { h: "Facility", get: (d) => money(d.f_pymt) },
+      { h: "Office", get: (d) => money(d.o_pymt) },
+      { h: "Facility \u00f7 office", get: (d) => (d.ratio == null ? "\u2014" : d.ratio.toFixed(2) + "x") },
+      { h: "Differential", get: (d) => money(d.savings) },
+      { h: "Facility services", get: (d) => count(d.f_svcs) },
+    ], rows.slice().sort((a, b) => (b.savings || 0) - (a.savings || 0)));
+
 
     document.getElementById("h5read").textContent =
       `Reading it: of ${count(ss.n_codes)} codes billed in both settings, `

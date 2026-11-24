@@ -401,3 +401,38 @@ test("every page loads its modules in dependency order", () => {
   }
 });
 
+test("every plate that draws a chart also offers a text equivalent", () => {
+  /* frame() marks every chart role="img", which makes its marks presentational:
+     a screen reader gets one sentence for the whole figure and none of the
+     numbers. A SHOW TABLE toggle is the equivalent. For a long time only hero 4
+     had one while a comment claimed "the SHOW TABLE toggles" covered the rest.
+
+     The Detail and explorer plates are exempt by shape, not by exception: their
+     table IS the content, so a toggle would hide what the reader came for. */
+  const plates = index.split(/<section class="plate"/).slice(1);
+  let checked = 0;
+  for (const plate of plates) {
+    const ids = [...plate.matchAll(/id="(c[A-Z]\w+|tilemap)"/g)].map((m) => m[1]);
+    if (!ids.length) continue;              // no chart on this plate
+    if (/<table id="tProv"/.test(plate)) continue;   // the detail table is the content
+    checked++;
+    assert.match(plate, /<details class="showtbl">/,
+      `a plate drawing ${ids.join(", ")} has no SHOW TABLE -- its figures reach ` +
+      "no screen reader at all");
+    assert.match(plate, /<table id="t\w+"/,
+      `the SHOW TABLE on the plate drawing ${ids.join(", ")} contains no table`);
+  }
+  assert.ok(checked >= 4, `expected every charted plate, only saw ${checked}`);
+});
+
+test("every SHOW TABLE table is filled by the renderers", () => {
+  // An empty <table> in the markup is worse than none: the toggle promises a
+  // text equivalent and then shows nothing.
+  const panels = read("js/panels.js");
+  for (const [, id] of index.matchAll(/<table id="(t\w+)"/g)) {
+    if (id === "tProv") continue;           // filled by renderProviders, pager-driven
+    assert.ok(panels.includes(`"${id}"`),
+      `#${id} exists in the markup but panels.js never fills it`);
+  }
+});
+

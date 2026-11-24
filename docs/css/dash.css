@@ -133,8 +133,11 @@
   /* The ink fill and the hover outline both ease, so moving between sections reads
      as a transition rather than a jump cut. Short enough not to lag the click. */
   .nav a { transition: background-color .15s ease, color .15s ease, box-shadow .15s ease; }
-  .nav a[aria-current] { background: var(--ink); color: var(--sheet); }
-  .nav a:not([aria-current]):hover { box-shadow: inset 0 0 0 1px var(--ink);
+  /* ="true", never bare [aria-current]: ARIA allows aria-current="false" to mean
+     "not current", and a presence selector would paint every one of those as the
+     active section. */
+  .nav a[aria-current="true"] { background: var(--ink); color: var(--sheet); }
+  .nav a:not([aria-current="true"]):hover { box-shadow: inset 0 0 0 1px var(--ink);
     color: var(--ink); }
   @media (prefers-reduced-motion: reduce) { .nav a { transition: none; } }
   .btn { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
@@ -279,7 +282,16 @@
   .tip .note { display: block; margin-top: 4px; color: var(--hair); font-size: 11.5px; }
   @media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
 
+  /* Screen-reader-only: the keyboard cursor's live region lives in one of these. */
+  .vh { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
   .chartbox { position: relative; }
+  /* A chart is one tab stop and arrow keys step through it, so the ring has to be
+     unmistakable -- it is the only thing telling a keyboard user which chart the
+     arrows now belong to. :focus-visible, so a mouse click does not draw it. */
+  .chartbox:focus-visible, #tilemap:focus-visible, #cCred:focus-visible {
+    outline: 2px solid var(--link); outline-offset: 3px; }
   .chartbox > svg { width: 100%; height: auto; display: block; }
   .chartbox svg text { font-family: var(--font-mono); }
   .figtitle { font-size: 13px; font-weight: 600; margin: 0 0 8px;

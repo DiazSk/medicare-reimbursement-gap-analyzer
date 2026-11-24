@@ -275,9 +275,9 @@
 <script src="js/charts.js?v=fdc6692b"></script>
 <script src="js/guardrails.js?v=b1c99f3b"></script>
 <script src="js/us-states.js?v=13104246"></script>
-<script src="js/svg.js?v=663dcabf"></script>
+<script src="js/svg.js?v=5b92e7b2"></script>
 <script src="js/panels.js?v=22ba4ba1"></script>
-<script src="js/tip.js?v=528b5b98"></script>
+<script src="js/tip.js?v=3ca8d159"></script>
 <!-- engine.js and live.js load before the boot script rather than after it, so
      the toggle can bind window.MD.live at parse time instead of lazily. -->
 <script src="js/engine.js?v=fc322508"></script>
@@ -396,18 +396,46 @@ function badgeHero2(v) {
   G.applyBadge(badge, Number(row && row.n_n != null ? row.n_n : 0));
 }
 
+/* The last view actually painted. Kept so a resize can redraw at the new width
+   without going back to the source: in live mode `withView` re-runs
+   viewFromQueries, and re-querying 9.66M rows because someone dragged a window
+   edge is not what a resize asked for. */
+let lastView = null;
+
+function paintAll(v) {
+  lastView = v;
+  P.renderHero1(v, F);
+  P.renderHero2(v, F);
+  P.renderHero3(v);
+  P.renderHero4(v);
+  P.renderHero5(v);
+  P.renderProviders(v, F, PROV_STATE);
+  badgeHero2(v);
+}
+
 function renderAll() {
   window.MD.charts.readTokens();
-  return withView(v => {
-    P.renderHero1(v, F);
-    P.renderHero2(v, F);
-    P.renderHero3(v);
-    P.renderHero4(v);
-    P.renderHero5(v);
-    P.renderProviders(v, F, PROV_STATE);
-    badgeHero2(v);
-  });
+  return withView(paintAll);
 }
+
+/* Every chart writes a viewBox from its host's width at render time and nothing
+   re-reads it, so the SVG scales against a stale frame until the next filter
+   change. Measured before this existed: narrowing to 420px put cGeo's state
+   codes at 3.1px -- a viewBox of 1154 inside a 346px host. The charting library
+   redrew on resize for free; nothing picked that up when it was deleted.
+
+   Width only. A phone fires resize when the URL bar hides, and a height-only
+   change moves no chart. Debounced because resize fires continuously while a
+   window is dragged, and each repaint redraws nine charts. */
+let lastWidth = window.innerWidth;
+let resizeTimer = null;
+
+addEventListener("resize", () => {
+  if (window.innerWidth === lastWidth) return;
+  lastWidth = window.innerWidth;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (lastView) paintAll(lastView); }, 160);
+}, { passive: true });
 function init() {
   P.renderStatics(DATA);
 

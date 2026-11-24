@@ -349,3 +349,19 @@ test("tip.js is the only thing that styles .tip, and dash.css actually does", ()
   assert.match(css, /pointer-events:\s*none/, ".tip must not eat its own hover");
 });
 
+test("the findings page repaints its charts when the width changes", () => {
+  /* Every chart writes a viewBox from its host's width at render time and nothing
+     re-reads it. Before this wiring existed, narrowing to 420px without reloading
+     left cGeo drawing a 1154 viewBox into a 346px host -- state codes at 3.1px.
+     The charting library redrew on resize for free and nothing replaced it.
+
+     index.html's listener is inline script, so no unit test can observe it; the
+     explorer's equivalent is covered directly in explore.test.js. */
+  assert.match(index, /addEventListener\("resize"/,
+    "index.html has no resize listener, so charts keep a stale viewBox");
+  assert.match(index, /innerWidth === lastWidth/,
+    "the resize handler must ignore height-only resizes (a phone's URL bar)");
+  assert.match(index, /setTimeout\(\s*\(\)\s*=>\s*\{\s*if \(lastView\)/,
+    "the repaint must be debounced and reuse the last view, never re-query");
+});
+

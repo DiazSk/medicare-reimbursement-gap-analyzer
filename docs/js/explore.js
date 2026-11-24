@@ -138,6 +138,31 @@
     const m = MEASURES.find((x) => x.key === measure);
     renderTable(data, rows, cols, m);
     renderChart(data, rows, cols, m);
+    lastChart = { data, rows, cols, m };
+  }
+
+  /* dotPlot writes a viewBox from the host's width at render time and nothing
+     re-reads it, so the chart scales against a stale frame until the next query.
+     Re-drawing from the rows already in hand rather than re-running run(): a
+     window drag must not re-query the cube.
+
+     Width only -- a phone fires resize when the URL bar hides, and a height-only
+     change moves nothing here. Debounced, because resize fires continuously. */
+  let lastChart = null;
+  let lastWidth = root.innerWidth;
+  let resizeTimer = null;
+
+  function wireResize() {
+    root.addEventListener("resize", () => {
+      if (root.innerWidth === lastWidth) return;
+      lastWidth = root.innerWidth;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (!lastChart) return;
+        const c = lastChart;
+        renderChart(c.data, c.rows, c.cols, c.m);
+      }, 160);
+    }, { passive: true });
   }
 
   // Column defs carry their own alignment rather than inferring it from
@@ -208,6 +233,7 @@
 
   async function init() {
     C().readTokens();
+    wireResize();
     fill(document.getElementById("pRows"), DIMENSIONS);
     fill(document.getElementById("pCols"), DIMENSIONS, true);
     fill(document.getElementById("pMeasure"), MEASURES);

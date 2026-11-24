@@ -139,6 +139,7 @@ function loadWithDom() {
     pChart: { innerHTML: "", clientWidth: 500 }, pRun: {}, theme: {},
   };
   const resolvers = [];
+  const listeners = {};
   // The stub CAPTURES the spec: returning "" and discarding it let 17 of 26 mutations
   // survive, including deleting the renderChart call outright.
   const specs = [];
@@ -155,6 +156,10 @@ function loadWithDom() {
       charts: { readTokens: () => {}, tokens: () => ({ s1: "x" }) },
       svg: { dotPlot: (spec) => { specs.push(spec); return "<svg>plot</svg>"; } },
     },
+    // A real window has both. Without them the resize wiring throws into an
+    // unhandled rejection AFTER the test ends, which node reports as a pass.
+    innerWidth: 1200,
+    addEventListener: (type, fn) => { (listeners[type] || (listeners[type] = [])).push(fn); },
   };
   global.window = win;
   global.document = { getElementById: (id) => els[id] };
@@ -163,7 +168,8 @@ function loadWithDom() {
   // needs `document` to exist. Each test deletes it in a `finally`, so a
   // later plain load() (which expects `typeof document === "undefined"`)
   // never inherits it.
-  return { run: win.MD.explore.run, els, resolvers, specs };
+  return { run: win.MD.explore.run, init: win.MD.explore.init,
+           els, resolvers, specs, win, listeners };
 }
 
 test("a slow query resolving after a fast one does not paint", async () => {
@@ -358,3 +364,57 @@ test("renderChart's aria names the dimensions by label", async () => {
     (e) => { e.pCols.value = "ruca_bucket"; });
   assert.equal(two.spec.aria, "Medicare paid by Specialty and Rurality (RUCA)");
 });
+
+/* The chart writes a viewBox from the host width at render time; nothing re-read it,
+   so a window drag left the SVG scaling against a stale frame. Measured on the
+   findings page before the fix: narrowing to 420px put cGeo's labels at 3.1px. */
+
+test("a width change repaints the chart from the rows already in hand", async () => {
+  const { run, els, resolvers, specs, win, listeners } = loadWithDom();
+  try {
+    els.pMeasure.value = "paid";
+    const p = run();
+    resolvers[0](desc(3));
+    await p;
+    assert.equal(specs.length, 1, "first paint");
+    const queriesAfterFirstPaint = resolvers.length;
+
+    assert.ok(listeners.resize && listeners.resize.length,
+      "no resize listener was registered -- the chart can never redraw at a new width");
+
+    els.pChart.clientWidth = 340;
+    win.innerWidth = 420;
+    listeners.resize.forEach((fn) => fn());
+    await new Promise((r) => setTimeout(r, 260));
+
+    assert.equal(specs.length, 2, "the width changed and the chart did not repaint");
+    assert.equal(specs[1].width, 340, "the repaint must read the host's NEW width");
+    assert.deepEqual(specs[1].rows.map((r) => r.value), specs[0].rows.map((r) => r.value),
+      "the repaint must reuse the rows, not fetch different ones");
+    assert.equal(resolvers.length, queriesAfterFirstPaint,
+      "a resize re-queried the cube -- dragging a window must not re-run the query");
+  } finally {
+    delete global.document;
+  }
+});
+
+test("a height-only resize does not repaint", async () => {
+  // A phone fires resize whenever the URL bar hides. Nothing moves horizontally,
+  // so redrawing nine charts for it is pure waste.
+  const { run, els, resolvers, specs, listeners } = loadWithDom();
+  try {
+    els.pMeasure.value = "paid";
+    const p = run();
+    resolvers[0](desc(3));
+    await p;
+    assert.equal(specs.length, 1);
+
+    listeners.resize.forEach((fn) => fn());   // innerWidth untouched
+    await new Promise((r) => setTimeout(r, 260));
+
+    assert.equal(specs.length, 1, "repainted on a height-only resize");
+  } finally {
+    delete global.document;
+  }
+});
+

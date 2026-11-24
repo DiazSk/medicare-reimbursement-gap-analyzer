@@ -132,8 +132,13 @@
      which makes descendants presentational: the marks never reached the
      accessibility tree at all. Verified against Chrome's tree -- a chart's <circle>
      elements and their titles are absent from it. So the titles cost a duplicate
-     tooltip and bought nothing. The svg-level aria-label is the accessible name, and
-     the SHOW TABLE toggles are where per-datum figures are readable as text.
+     tooltip and bought nothing. The svg-level aria-label is the accessible name.
+
+     That leaves a real gap, and removing the titles did not create it: a reader
+     using assistive tech gets one sentence per chart and the prose beside it, not
+     the figures. Only hero 4 has a SHOW TABLE toggle, and only because it is HTML
+     with a per-cell aria-label already. Extending that <details> pattern to the
+     other eight is the fix; it is not done.
 
      A bare string is accepted as a value-only tip. Every call site passes parts, but
      a missed one should render its text rather than "[object Object]" -- index.html

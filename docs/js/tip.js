@@ -9,11 +9,17 @@
    change, and per-mark listeners would be re-attached on each pass and leak the old
    ones. Delegation also means a chart drawn later needs no registration at all.
 
-   <title> deliberately stays on every mark. It is what screen readers and touch
-   devices get, and this layer is pointer-only -- the marks are not focusable, so
-   there is no keyboard path to a tip. Making ~400 marks tabbable is a larger
-   accessibility change than this one, and a half-done version would add tab stops
-   that announce nothing.
+   No mark carries a <title> any more. They were removed once it was clear they
+   reached no screen reader -- frame() marks every chart role="img", which makes
+   descendants presentational -- while still drawing the browser's own tooltip
+   underneath this one.
+
+   So this layer is pointer-only AND it is the only tip. The marks are not
+   focusable, so there is no keyboard path to one, and the figures a sighted
+   reader gets on hover are not available to assistive tech outside hero 4's
+   SHOW TABLE. Making ~400 marks tabbable is a larger change than this one, and a
+   half-done version would add tab stops that announce nothing. The gap is real
+   and open.
 
    Classic script, like everything else here: ES modules are CORS-blocked over
    file://, and docs/index.html must keep opening straight from disk. */
@@ -53,7 +59,9 @@
     if (d.querySelector(".tip")) return;           // idempotent: one tip per page
     const box = d.createElement("div");
     box.className = "tip";
-    box.setAttribute("aria-hidden", "true");       // <title> already announces this
+    // Hidden from the accessibility tree: it mirrors a mark the tree does not
+    // expose, and announcing it on pointer move would interrupt without context.
+    box.setAttribute("aria-hidden", "true");
     d.body.appendChild(box);
 
     let shown = null;
@@ -65,9 +73,9 @@
     };
 
     d.addEventListener("pointermove", (ev) => {
-      // A pointer that is not a mouse gets the native <title> instead: a tip that
-      // follows a finger sits under it, and tap-to-show needs a dismiss affordance
-      // this layer does not have.
+      // Touch and pen get nothing: a tip that follows a finger sits under it, and
+      // tap-to-show needs a dismiss affordance this layer does not have. There is no
+      // native <title> behind it any more, so this is a bail-out, not a fallback.
       if (ev.pointerType && ev.pointerType !== "mouse") return hide();
 
       const el = ev.target && ev.target.closest ? ev.target.closest(SEL) : null;

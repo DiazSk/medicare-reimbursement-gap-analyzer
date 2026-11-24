@@ -436,3 +436,22 @@ test("every SHOW TABLE table is filled by the renderers", () => {
   }
 });
 
+test("the findings page loads the nav and keyboard layers", () => {
+  // Both are inert if the tag is missing, and silently: the nav simply never
+  // updates and charts simply never take focus. Nothing throws.
+  for (const f of ["js/nav.js", "js/tip.js"]) {
+    assert.match(index, new RegExp(`<script src="${f.replace(".", "\\.")}(\\?v=[0-9a-f]+)?"`),
+      `index.html never loads ${f}`);
+  }
+});
+
+test("the nav ships exactly one current link and the spy can move it", () => {
+  /* The markup hardcoded aria-current="true" on the first link and nothing moved
+     it, so the nav reported Geography however far you scrolled. */
+  const nav = (index.match(/<nav class="nav"[\s\S]*?<\/nav>/) || [""])[0];
+  const current = nav.match(/aria-current="true"/g) || [];
+  assert.equal(current.length, 1, `${current.length} links ship as current`);
+  assert.ok(read("js/nav.js").includes("aria-current"),
+    "nav.js must be the thing that moves it");
+});
+

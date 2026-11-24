@@ -54,23 +54,59 @@
     };
   }
 
+  let box = null;      // the one tip element
+  let live = null;     // the polite live region the keyboard cursor announces into
+  let shown = null;
+
+  function hide() {
+    if (!shown) return;
+    shown = null;
+    if (box) box.classList.remove("on");
+  }
+
+  /* Fill the tip for a mark and place it at a point. Shared by the pointer path
+     and the keyboard cursor, so the two cannot drift into different tips. */
+  function showAt(el, x, y, d) {
+    if (!box) return;
+    if (el !== shown) {
+      const p = parts(el);
+      box.innerHTML =
+        (p.label ? `<span class="mono">${esc(p.label)}</span>` : "")
+        + (p.value ? `<b>${esc(p.value)}</b>` : "")
+        + (p.note ? `<span class="note">${esc(p.note)}</span>` : "");
+      shown = el;
+      box.classList.add("on");
+    }
+    const r = box.getBoundingClientRect();
+    const vw = root.innerWidth || d.documentElement.clientWidth;
+    const vh = root.innerHeight || d.documentElement.clientHeight;
+    const pos = place(x, y, r.width, r.height, vw, vh);
+    box.style.left = pos.left + "px";
+    box.style.top = pos.top + "px";
+  }
+
+  // What a screen reader hears when the cursor lands on a mark.
+  function announce(el) {
+    if (!live) return;
+    const p = parts(el);
+    live.textContent = [p.label, p.value, p.note].filter(Boolean).join(" \u00b7 ");
+  }
+
   function init(doc) {
     const d = doc || document;
     if (d.querySelector(".tip")) return;           // idempotent: one tip per page
-    const box = d.createElement("div");
+    box = d.createElement("div");
     box.className = "tip";
     // Hidden from the accessibility tree: it mirrors a mark the tree does not
     // expose, and announcing it on pointer move would interrupt without context.
+    // The keyboard cursor announces through `live` instead, which is deliberate.
     box.setAttribute("aria-hidden", "true");
     d.body.appendChild(box);
 
-    let shown = null;
-
-    const hide = () => {
-      if (!shown) return;
-      shown = null;
-      box.classList.remove("on");
-    };
+    live = d.createElement("div");
+    live.className = "vh";
+    live.setAttribute("aria-live", "polite");
+    d.body.appendChild(live);
 
     d.addEventListener("pointermove", (ev) => {
       // Touch and pen get nothing: a tip that follows a finger sits under it, and
@@ -81,29 +117,119 @@
       const el = ev.target && ev.target.closest ? ev.target.closest(SEL) : null;
       if (!el) return hide();
 
-      if (el !== shown) {
-        const p = parts(el);
-        box.innerHTML =
-          (p.label ? `<span class="mono">${esc(p.label)}</span>` : "")
-          + (p.value ? `<b>${esc(p.value)}</b>` : "")
-          + (p.note ? `<span class="note">${esc(p.note)}</span>` : "");
-        shown = el;
-        box.classList.add("on");
-      }
-
-      // Measured after the content is set, so the flip uses this tip's real size.
-      const r = box.getBoundingClientRect();
-      const vw = root.innerWidth || d.documentElement.clientWidth;
-      const vh = root.innerHeight || d.documentElement.clientHeight;
-      const pos = place(ev.clientX, ev.clientY, r.width, r.height, vw, vh);
-      box.style.left = pos.left + "px";
-      box.style.top = pos.top + "px";
+      showAt(el, ev.clientX, ev.clientY, d);
     });
 
-    // A scroll moves the marks out from under a fixed-position tip, which would
-    // otherwise keep describing whatever used to be there.
-    d.addEventListener("scroll", hide, true);
+    /* A scroll moves the marks out from under a fixed-position tip, which would
+       otherwise keep describing whatever used to be there -- so the pointer tip
+       hides. The KEYBOARD tip must not: focusing a chart scrolls it into view,
+       which fired this handler and blanked the tip the arrow key had just opened.
+       Its mark is still the focused one, so it follows instead. */
+    d.addEventListener("scroll", () => {
+      if (kbHost && cursors.has(kbHost)) moveTo(kbHost, cursors.get(kbHost), d);
+      else hide();
+    }, true);
     d.addEventListener("pointerleave", hide);
+  }
+
+
+  /* ── keyboard cursor ──────────────────────────────────────────────────────
+
+     frame() marks every chart role="img", so its marks are presentational and a
+     screen reader gets one sentence for the figure. The SHOW TABLE toggles carry
+     the numbers as text; this carries the CHART, so a keyboard user can explore
+     it the way a mouse user does.
+
+     One tab stop per chart, not one per mark. There are ~400 marks on this page
+     and tabbing through 60 scatter bubbles to reach the footer would be hostile.
+     Arrow keys move a cursor inside the focused chart, which is the pattern the
+     reference dashboard uses.
+
+     The tabindex lives on the HOST, never on the <svg>: panels re-render on every
+     filter change and on resize, replacing the svg wholesale. An attribute set on
+     the svg would vanish the first time anyone touched a filter -- and silently,
+     because nothing watches for it. The host div survives. */
+
+  const HOST_SEL = ".chartbox, #tilemap, #cCred";
+  const cursors = new WeakMap();   // host -> index of the focused mark
+  let kbHost = null;               // the host whose cursor is currently showing
+
+  function marksOf(host) {
+    return [...host.querySelectorAll(SEL)];
+  }
+
+  function moveTo(host, i, d) {
+    const marks = marksOf(host);
+    if (!marks.length) return;
+    const n = Math.max(0, Math.min(marks.length - 1, i));
+    cursors.set(host, n);
+    kbHost = host;
+    const el = marks[n];
+    const r = el.getBoundingClientRect();
+    showAt(el, r.left + r.width / 2, r.top + r.height / 2, d);
+    announce(el);
+  }
+
+  function initCursor(doc) {
+    const d = doc || document;
+    const hosts = [...d.querySelectorAll(HOST_SEL)];
+    if (!hosts.length) return 0;
+
+    for (const host of hosts) {
+      host.setAttribute("tabindex", "0");
+      /* A plain img role is not focusable in the a11y sense. group + a label says
+         "there is something in here to step through", and the description names
+         the keys rather than leaving the reader to guess. */
+      host.setAttribute("role", "group");
+      if (!host.getAttribute("aria-label")) {
+        const fig = host.querySelector(".figtitle, h3");
+        const svg = host.querySelector("svg[aria-label]");
+        host.setAttribute("aria-label",
+          (fig && fig.textContent.trim())
+          || (svg && svg.getAttribute("aria-label"))
+          || "Chart");
+      }
+      host.setAttribute("aria-description",
+        "Use the left and right arrow keys to step through the values.");
+    }
+
+    d.addEventListener("keydown", (ev) => {
+      const host = ev.target && ev.target.closest ? ev.target.closest(HOST_SEL) : null;
+      if (!host) return;
+
+      const marks = marksOf(host);
+      if (!marks.length) return;
+      const at = cursors.has(host) ? cursors.get(host) : -1;
+
+      switch (ev.key) {
+        case "ArrowRight": case "ArrowDown": moveTo(host, at + 1, d); break;
+        case "ArrowLeft":  case "ArrowUp":   moveTo(host, at <= 0 ? 0 : at - 1, d); break;
+        case "Home":                         moveTo(host, 0, d); break;
+        case "End":                          moveTo(host, marks.length - 1, d); break;
+        case "Escape":
+          cursors.delete(host);
+          kbHost = null;
+          hide();
+          if (live) live.textContent = "";
+          host.blur();
+          break;
+        default: return;      // every other key keeps its normal behaviour
+      }
+      // Only for keys actually handled, so Tab still leaves and / still finds.
+      ev.preventDefault();
+    });
+
+    /* Leaving the chart clears the cursor: a tip still showing over a chart the
+       reader has tabbed away from describes nothing they are looking at. */
+    d.addEventListener("focusout", (ev) => {
+      const host = ev.target && ev.target.closest ? ev.target.closest(HOST_SEL) : null;
+      if (!host) return;
+      cursors.delete(host);
+      if (kbHost === host) kbHost = null;
+      hide();
+    });
+
+    return hosts.length;
   }
 
   function esc(t) {
@@ -111,13 +237,14 @@
   }
 
   root.MD = root.MD || {};
-  root.MD.tip = { init, place };
+  root.MD.tip = { init, initCursor, place, marksOf };
 
   if (typeof document !== "undefined") {
+    const start = () => { init(); initCursor(); };
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => init());
+      document.addEventListener("DOMContentLoaded", start);
     } else {
-      init();
+      start();
     }
   }
 })(typeof window !== "undefined" ? window : globalThis);

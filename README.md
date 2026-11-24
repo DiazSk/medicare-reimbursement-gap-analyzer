@@ -2,7 +2,7 @@
 
 **9.66 million Medicare claims → a Bronze/Silver/Gold lakehouse → a dashboard that runs SQL over every row in your browser.**
 
-### ⟶ **[Open the live dashboard](https://diazsk.github.io/healthcare-lakehouse-azure/)** · **[Query the data yourself](https://diazsk.github.io/healthcare-lakehouse-azure/explore.html)**
+### ⟶ **[Open the live dashboard](https://diazsk.github.io/medicare-reimbursement-gap-analyzer/)** · **[Query the data yourself](https://diazsk.github.io/medicare-reimbursement-gap-analyzer/explore.html)**
 
 **Pipeline** `PySpark 3.5` · `Delta Lake` · `Azure Databricks` · `ADLS Gen2` · `Azure Data Factory` · `Key Vault` · `Microsoft Entra ID` · `Terraform` · `Python 3.11` · `SQL` · `Parquet`<br>
 **Serving** `DuckDB` · `DuckDB-WASM` · `WebAssembly` · `Chart.js` · `Power BI` · `marimo` · `Plotly`
@@ -61,50 +61,10 @@ Needs Python 3.11, Java 8/11/17, ~30 GB disk, 16 GB RAM. No Azure account, no cr
 <details>
 <summary><b>Architecture</b> — Medallion on Azure, reproducible locally</summary>
 
-```mermaid
-flowchart LR
-    CMS[("CMS 2023 CSV<br/>3.06 GB · public")]:::source
+<!-- Source: docs/diagrams/architecture.html (editable) and architecture.svg (vector). -->
+<!-- Regenerate the PNG from the HTML rather than editing it by hand. -->
 
-    subgraph LOCAL["Local reproduction (current)"]
-        direction TB
-        LSPARK["PySpark 3.5 + Delta 3.3<br/>local[8]"]:::local
-        LDATA[("data/{bronze,silver,gold}")]:::local
-    end
-
-    subgraph AZ["Azure (original — subscription retired)"]
-        direction TB
-        ADF["Data Factory"]:::azure
-        LAKE[("ADLS Gen2")]:::azure
-        KV[("Key Vault + Entra ID")]:::secret
-    end
-
-    subgraph NB["Medallion notebooks (identical in both paths)"]
-        direction TB
-        N1["01 bronze → silver"]
-        N2["02 → gold dims"]
-        N3["03 → gold fact"]
-        N4["04 → 5 hero marts"]
-        N5["99 DQ · 13 assertions"]
-    end
-
-    subgraph VIZ["Serving"]
-        direction TB
-        WEB["Dashboard + in-browser SQL<br/>GitHub Pages"]:::viz
-        PBI["Power BI-ready model"]:::viz
-    end
-
-    CMS --> LSPARK --> LDATA --> NB
-    CMS -.-> ADF -.-> LAKE -.-> NB
-    KV -.->|"OAuth 2.0"| LAKE
-    NB --> WEB
-    NB --> PBI
-
-    classDef source fill:#F1F5F9,stroke:#64748B,color:#0F172A
-    classDef azure  fill:#E0F2FE,stroke:#0284C7,color:#0F172A
-    classDef local  fill:#DCFCE7,stroke:#059669,color:#0F172A
-    classDef secret fill:#FEE2E2,stroke:#B91C1C,color:#0F172A
-    classDef viz    fill:#FDE68A,stroke:#B45309,color:#0F172A
-```
+![Medallion pipeline on two substrates: CMS 2023 claims feed either a local PySpark path or a retired Azure Data Factory and ADLS Gen2 path. Both converge on the same five medallion notebooks, which serve a published dashboard with in-browser SQL and a Power BI-ready star schema.](docs/diagrams/architecture.png)
 
 The dotted path is the original Azure execution; the solid path is how it runs today. The notebooks in the middle are byte-for-byte identical.
 
@@ -209,6 +169,7 @@ pipeline/                  # Local reproduction harness (no Azure)
 ├── run_local.py           # Execute the notebook chain in one JVM
 ├── publish_dashboard.py   # Gold → payload, chained into the builder + parity gate
 ├── build_explorer_data.py # Gold → tiered Parquet
+├── stamp_assets.py        # Content-hash the dashboard's script/style tags
 ├── verify_explorer_parity.py
 └── RUN_LOG.md             # Transcript of real runs
 

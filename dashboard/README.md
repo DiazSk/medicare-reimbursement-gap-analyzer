@@ -5,7 +5,7 @@ A reactive Python dashboard over the Gold layer, for exploring the data interact
 > **This is the secondary surface.** The primary, published dashboard is the static
 > [`docs/index.html`](../docs/index.html) — a single self-contained file with no runtime,
 > served at
-> [diazsk.github.io/healthcare-lakehouse-azure](https://diazsk.github.io/healthcare-lakehouse-azure/).
+> [diazsk.github.io/medicare-reimbursement-gap-analyzer](https://diazsk.github.io/medicare-reimbursement-gap-analyzer/).
 > Use this marimo app when you want to slice the data yourself in Python rather than read
 > a finished narrative.
 

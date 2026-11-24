@@ -4,27 +4,65 @@
 (function (root) {
   "use strict";
 
-  const { money, count, pct, inkOn, quantile } = root.MD.format;
-  const { tokens, axisOpts, legendOpts, tooltipOpts, mount } = root.MD.charts;
-  const { reliability, opacityFor } = root.MD.guardrails;
-  const diverging = (t) => root.MD.format.diverging(t, tokens().div);
+  const { money, moneyTick, count, pct, quantile } = root.MD.format;
+  const { tokens } = root.MD.charts;
+  const { reliability, isReliable } = root.MD.guardrails;
   const T = () => tokens();
-  // diverging() returns "rgb(r,g,b)"; the guardrail opacity rides on top of it so
-  // a thin cohort's bar is visibly weaker than a reliable one's.
-  const withAlpha = (c, a) =>
-    a >= 1 ? c : c.replace("rgb(", "rgba(").replace(")", `, ${a})`);
 
-  /* ── tile-grid US map layout (row, col) — 50 states + DC ─────────────────── */
-  const TILES = {
-    AK:[1,1], ME:[1,11],
-    VT:[2,10], NH:[2,11],
-    WA:[3,1], ID:[3,2], MT:[3,3], ND:[3,4], MN:[3,5], WI:[3,6], MI:[3,7], NY:[3,9], MA:[3,10], RI:[3,11],
-    OR:[4,1], NV:[4,2], WY:[4,3], SD:[4,4], IA:[4,5], IL:[4,6], IN:[4,7], OH:[4,8], PA:[4,9], NJ:[4,10], CT:[4,11],
-    CA:[5,1], UT:[5,2], CO:[5,3], NE:[5,4], MO:[5,5], KY:[5,6], WV:[5,7], VA:[5,8], MD:[5,9], DE:[5,10],
-    AZ:[6,2], NM:[6,3], KS:[6,4], AR:[6,5], TN:[6,6], NC:[6,7], SC:[6,8], DC:[6,9],
-    OK:[7,4], LA:[7,5], MS:[7,6], AL:[7,7], GA:[7,8],
-    HI:[8,1], TX:[8,4], FL:[8,9],
-  };
+  /* ── choropleth support ─────────────────────────────────────────────────
+     Geometry lives in us-states.js (us-atlas albers variant, pre-projected and
+     pre-inset). Read it lazily, not at load time: panels.test.js loads this module
+     with no window.US_STATES at all. */
+  const GEOM = () => root.US_STATES || {};
+
+  // The viewBox origin is NEGATIVE because the albers geometry starts at x = -58
+  // (Alaska). A "0 0 975 610" box clips it; this cost a rebuild to find.
+  const VIEWBOX = "-60 12 1085 595";
+  const V = () => root.MD.svg;
+
+  /* Mounts an svg.js chart into its host. dotPlot and dumbbellPlot cannot measure their own
+     host -- svg.js is deliberately DOM-free -- so the width is read here. Without it a
+     caller silently gets a 760-wide viewBox in a 526px box and 7.3px labels, which is
+     the defect this helper exists to make unrepeatable.
+
+     `renderer` names the svg.js function to call, so dumbbellPlot gets the same width
+     injection rather than re-opening the footgun at its own call site. Charts that
+     build bespoke SVG (hero 3's Lorenz curve, hero 5's scatter) take no spec object
+     and read their host directly; generalising further for two callers that share no
+     shape would be inventing a framework. */
+  function mountSvg(id, title, spec, renderer) {
+    const host = document.getElementById(id);
+    if (!host) {
+      // A typo'd id would otherwise be an empty box with nothing in the console.
+      console.warn(`mountSvg: no element #${id}`);
+      return;
+    }
+    const draw = V()[renderer || "dotPlot"];
+    host.innerHTML = (title ? `<h3 class="figtitle">${V().esc(title)}</h3>` : "")
+      + draw(Object.assign({ t: T(), width: host.clientWidth || 760 }, spec));
+  }
+  // Callout labels for areas too small to hold one sit in a right margin at this x.
+  const GUTTER_X = 952;
+
+  /* Bounding box and centre straight off the path's own numbers. Every command in
+     this data is M or L with absolute x,y pairs, so the coordinate stream is simply
+     every other number -- no path parser needed. */
+  function pathBox(d) {
+    const n = d.match(/-?\d+(?:\.\d+)?/g);
+    if (!n) return null;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let k = 0; k < n.length - 1; k += 2) {
+      const x = +n[k], y = +n[k + 1];
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
+  }
+
+  const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
   /* ── HERO 1 ─────────────────────────────────────────────────────────────── */
   function geoByState(geoRows, filters) {
@@ -42,47 +80,170 @@
   }
 
 
+  /* Four magnitude bins, and SIGN CARRIED BY FILL TEXTURE rather than by hue: solid is
+     above the geographically standardized amount, a 45-degree rule-hatch is below. The
+     ramp step then means magnitude on BOTH sides of zero -- eight distinguishable
+     states instead of four, which is the resolution the tile map had to spend on sign.
+
+     Quantising is also a contrast fix, though not the one the plan described. The old
+     continuous ramp had a dead band where a fill fails 4.5:1 against EITHER ink, and
+     binning does make that band unreachable. What binning does NOT fix is the ink
+     choice: r300 is a bin, and a single luminance threshold picks white on it at
+     2.50:1. That is why the ink comes from rampInk() below and not from a threshold. */
+  /* Label ink per ramp bin, taken from the arithmetic rather than from a luminance
+     threshold. A single luminance-threshold picker CANNOT express this mapping:
+     r300's relative luminance is 0.3694, just under a 0.4 cutoff, so it would choose
+     white at 2.50:1 where --ink gives 7.11:1. Measured against each fill:
+
+       bin 0  r100   --ink 13.45:1   white  1.32:1
+       bin 1  r300   --ink  7.11:1   white  2.50:1
+       bin 2  r500   --ink  3.30:1   white  5.39:1
+       bin 3  r700   --ink  1.49:1   white 11.95:1
+
+     The plan claimed quantising made that bad band unreachable. It does not --
+     r300 IS one of the four bins, so the threshold was reachable on every load. */
+  const rampInk = (bin) => (bin <= 1 ? T().ink1 : "#ffffff");
+
+  const binOf = (v, bound) => Math.min(3, Math.floor(Math.abs(v) / bound * 4));
+
+  function renderChoropleth(rows, filters, bound) {
+    const host = document.getElementById("tilemap");
+    const G = GEOM();
+    if (!Object.keys(G).length) {
+      // Loud, not silent: a blank panel would look like a filter with no matches.
+      host.innerHTML = '<p class="empty">State geometry (js/us-states.js) did not load, '
+        + 'so the map cannot be drawn. The ranking beside it is unaffected.</p>';
+      return;
+    }
+    const ramp = T().ramp;
+    const by = Object.fromEntries(rows.map(r => [r.state, r]));
+    const per = (st) => (by[st] && by[st].perBene !== null ? by[st].perBene : null);
+
+    // One pattern per bin. Pitch tightens as magnitude rises so the hatch reads as
+    // ordered even in monochrome or in print.
+    const defs = ramp.map((hex, i) => `<pattern id="h1rule${i}" width="${7 - i}" `
+      + `height="${7 - i}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">`
+      + `<rect width="${7 - i}" height="${7 - i}" fill="${T().sheet}"/>`
+      + `<line x1="0" y1="0" x2="0" y2="${7 - i}" stroke="${hex}" `
+      + `stroke-width="${(1.4 + i * 0.5).toFixed(1)}"/></pattern>`).join("")
+      + `<pattern id="h1nodata" width="5" height="5" patternUnits="userSpaceOnUse" `
+      + `patternTransform="rotate(45)"><rect width="5" height="5" fill="${T().sheet}"/>`
+      + `<line x1="0" y1="0" x2="0" y2="5" stroke="${T().hair}" stroke-width="1"/></pattern>`;
+
+    // Label the eight largest by magnitude; the rest would collide.
+    const ranked = Object.keys(G).filter(s => per(s) !== null)
+      .sort((a, b) => Math.abs(per(b)) - Math.abs(per(a)));
+    const labelled = new Set(ranked.slice(0, 8));
+
+    const shapes = [], labels = [], callouts = [];
+    for (const [st, d] of Object.entries(G)) {
+      const v = per(st), box = pathBox(d);
+      const sel = filters.state !== "all" && st === filters.state;
+      const dim = filters.state !== "all" && !sel;
+      // Selection rides on the OUTLINE, never on the fill: the fill is already
+      // carrying both sign and magnitude.
+      const edge = sel ? `stroke="${T().ink1}" stroke-width="2"`
+        : `stroke="${T().muted}" stroke-width=".8"`;
+      const fade = dim ? ' opacity=".35"' : "";
+
+      if (v === null) {
+        const tip = V().tipParts({ label: st, value: "No data for this filter" });
+        shapes.push(`<path d="${d}" fill="url(#h1nodata)" ${edge}${fade}${tip}/>`);
+        continue;
+      }
+      const b = binOf(v, bound), up = v >= 0;
+      // Same three parts as every other mark, so one hover layer serves the map too.
+      const t = V().tipParts({
+        label: st,
+        value: `${money(v, 2)} per beneficiary-proxy`,
+        note: `${up ? "Above" : "Below"} the standardized amount`,
+      });
+      shapes.push(`<path d="${d}" fill="${up ? ramp[b] : `url(#h1rule${b})`}" ${edge}${fade}`
+        + `${t}/>`);
+
+      if (!labelled.has(st) || !box || dim) continue;
+      if (box.w > 24 && box.h > 14) {
+        // A hatched fill is mostly sheet, so it always takes the dark ink.
+        const ink = up ? rampInk(b) : T().ink1;
+        labels.push(`<text x="${box.cx.toFixed(0)}" y="${(box.cy + 3).toFixed(0)}" `
+          + `text-anchor="middle" font-size="9.5" letter-spacing=".06em" `
+          + `fill="${ink}">${esc(st)}</text>`);
+      } else {
+        callouts.push({ st, v, cx: box.cx, cy: box.cy });
+      }
+    }
+
+    /* Too small to hold a label, so it goes in the right margin with a leader -- the
+       atlas convention, and the only way DC/RI/DE/CT read at all. Stacked top-down and
+       pushed apart so two leaders never land on the same line.
+       ponytail: right gutter only. Every area small enough to need one is in the
+       northeast; a western one would need a left gutter too. */
+    callouts.sort((a, b) => a.cy - b.cy);
+    let lastY = -Infinity;
+    for (const c of callouts) {
+      const ty = Math.max(c.cy, lastY + 14);
+      lastY = ty;
+      labels.push(`<polyline points="${(c.cx + 2).toFixed(0)},${c.cy.toFixed(0)} `
+        + `${(GUTTER_X - 16)},${ty.toFixed(0)} ${(GUTTER_X - 4)},${ty.toFixed(0)}" `
+        + `fill="none" stroke="${T().ink1}" stroke-width=".8"/>`
+        + `<circle cx="${c.cx.toFixed(0)}" cy="${c.cy.toFixed(0)}" r="1.8" fill="${T().ink1}"/>`
+        + `<text x="${GUTTER_X}" y="${(ty + 3).toFixed(0)}" font-size="9.5" `
+        + `letter-spacing=".06em" fill="${T().ink1}">${esc(c.st)} ${esc(money(c.v, 2))}</text>`);
+    }
+
+    host.innerHTML = `<svg viewBox="${VIEWBOX}" role="img" aria-label="Geographic premium `
+      + `per beneficiary-proxy by state. Solid fill is above the standardized amount, `
+      + `ruled fill is below.">`
+      /* The labels and callout leaders are drawn over the states, so without
+         pointer-events="none" a label swallows the hover for the very state it
+         names -- elementFromPoint returns the <text>, which is a sibling of the
+         <path> and carries no tip, so closest() finds nothing and the map reads as
+         having no data exactly where it is most legible. */
+      + `<defs>${defs}</defs>${shapes.join("")}`
+      + `<g pointer-events="none">${labels.join("")}</g></svg>`;
+  }
+
+  /* Eight keys plus a conditional ninth. The no-data key appears ONLY when a no-data
+     area was actually drawn -- a legend key for a state the map does not contain is a
+     claim about nothing, and this mockup grew phantom keys twice before this rule. */
+  function hero1Legend(rows, bound) {
+    const ramp = T().ramp;
+    const G = GEOM();
+    const drawnStates = rows.filter(r => G[r.state] && r.perBene !== null).length;
+    const missing = Object.keys(G).length - drawnStates;
+    const step = (i) => money(bound * (i + 1) / 4, 2);
+    const solid = ramp.map((c, i) =>
+      `<span class="lk"><i style="background:${c}"></i>${step(i)}</span>`).join("");
+    const ruled = ramp.map((c, i) =>
+      `<span class="lk"><i style="background:${T().sheet};background-image:`
+      + `repeating-linear-gradient(45deg,transparent 0 ${6 - i}px,${c} ${6 - i}px `
+      + `${(7.4 - i + i * 0.5).toFixed(1)}px)"></i>${step(i)}</span>`).join("");
+    const nodata = missing > 0
+      ? `<span class="lk"><i style="background:${T().sheet};background-image:`
+        + `repeating-linear-gradient(45deg,transparent 0 3px,${T().hair} 3px 4px)"></i>`
+        + `No data</span>`
+      : "";
+    return `<span class="lgroup">Solid · above standard</span>${solid}`
+      + `<span class="lgroup">Ruled · below</span>${ruled}${nodata}`;
+  }
+
   function renderHero1(view, filters) {
     const rows = geoByState(view.geo, filters);
-    // Scale only over states the map actually DRAWS. Territories like MP and FM are
-    // in the data but not on the tile grid, and letting them set the bound
-    // compressed every drawn state toward the neutral midpoint.
-    const drawn = rows.filter(r => TILES[r.state] && r.perBene !== null);
+    const G = GEOM();
+    // Scale only over areas the map actually DRAWS. Territories like MP and FM are in
+    // the data but have no geometry, and letting them set the bound compressed every
+    // drawn state toward the midpoint.
+    const drawn = rows.filter(r => G[r.state] && r.perBene !== null);
     const absSorted = drawn.map(r => Math.abs(r.perBene)).sort((a, b) => a - b);
     // p95 rather than max: Alaska's geographic adjustment is a genuine outlier at
-    // roughly twice the next state, so anchoring on it flattens the other fifty.
-    // diverging() clamps, and the legend states the true range, so nothing is hidden.
+    // roughly twice the next state, so anchoring on it flattens the other fifty. The
+    // bin function clamps and the legend states the true range, so nothing is hidden.
     const bound = quantile(absSorted, 0.95) || 1;
-    const lo = Math.min(...drawn.map(r => r.perBene));
-    const hi = Math.max(...drawn.map(r => r.perBene));
+    const lo = drawn.length ? Math.min(...drawn.map(r => r.perBene)) : Infinity;
+    const hi = drawn.length ? Math.max(...drawn.map(r => r.perBene)) : -Infinity;
 
-    // tile map
-    const byState = Object.fromEntries(rows.map(r => [r.state, r]));
-    const map = document.getElementById("tilemap");
-    map.innerHTML = "";
-    for (const [st, [row, col]] of Object.entries(TILES)) {
-      const r = byState[st];
-      const d = document.createElement("div");
-      d.className = "tile";
-      d.style.gridRow = row; d.style.gridColumn = col;
-      d.textContent = st;
-      if (r && r.perBene !== null) {
-        const bg = diverging(r.perBene / bound);
-        d.style.background = bg;
-        d.style.color = inkOn(bg);
-        d.title = `${st} — geographic premium ${money(r.premium)} total, `
-          + `${money(r.perBene, 2)} per beneficiary-proxy`;
-      } else {
-        d.style.background = "var(--plane)";
-        d.style.color = "var(--ink-muted)";
-        d.title = `${st} — no data for this filter`;
-      }
-      if (filters.state !== "all") d.classList.add(st === filters.state ? "sel" : "dim");
-      map.appendChild(d);
-    }
-    document.getElementById("ramp").innerHTML =
-      Array.from({ length: 21 }, (_, i) =>
-        `<span style="background:${diverging(-1 + i / 10)}"></span>`).join("");
+    renderChoropleth(rows, filters, bound);
+    document.getElementById("ramp").innerHTML = hero1Legend(rows, bound);
     document.getElementById("rampScale").textContent = hero1Ramp(drawn, bound, lo, hi);
 
     // tornado: extremes at both ends, by total premium
@@ -90,40 +251,19 @@
     const top = sorted.slice(0, 10), bot = sorted.slice(-10).reverse();
     const pick = top.concat(bot).filter((v, i, a) =>
       a.findIndex(x => x.state === v.state) === i);
-    pick.sort((a, b) => a.premium - b.premium);
+    pick.sort((a, b) => b.premium - a.premium);
 
-    mount("cGeo", {
-      type: "bar",
-      data: {
-        labels: pick.map(r => r.state),
-        datasets: [{
-          label: "Geographic premium",
-          data: pick.map(r => r.premium),
-          // Color encodes the sign, which is the point; it is not a series identity.
-          backgroundColor: pick.map(r => diverging(r.premium >= 0 ? 0.75 : -0.75)),
-          borderWidth: 0, borderRadius: 2,
-        }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(false),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Largest net senders and receivers", align: "start",
-                   padding: { bottom: 10 } },
-          tooltip: tooltipOpts({
-            label: c => ` ${money(c.raw)} geographic premium`,
-            afterLabel: c => {
-              const r = pick[c.dataIndex];
-              return `${money(r.pymt)} total Medicare paid`;
-            },
-          }),
-        },
-        scales: {
-          x: axisOpts("Geographic premium (paid − standardized)", v => money(v, 0)),
-          y: axisOpts(null, null, { grid: { display: false } }),
-        },
-      },
+    mountSvg("cGeo", "Largest net senders and receivers", {
+      rows: pick,
+      label: (r) => r.state,
+      value: (r) => r.premium,
+      fmt: moneyTick,
+      fmtValue: (v) => money(v),
+      signed: true,
+      axisTitle: "Geographic premium (paid − standardized)",
+      aria: "Largest net senders and receivers of geographic premium, by state",
+      tip: (r) => ({ label: r.state, value: `${money(r.premium)} premium`,
+                     note: `${money(r.pymt)} total Medicare paid` }),
     });
 
     document.getElementById("h1read").textContent = hero1Read(sorted);
@@ -194,81 +334,62 @@
     // +2,223% wearing a thin-sample badge, not silently drop the panel's only row.
     // The unselected exclusions are named in the caveat line under the chart.
     const ok = view.nonpar.filter(d => d.measurable || d.specialty === hi)
-      .sort((a, b) => a.premium_pct - b.premium_pct);
+      .sort((a, b) => b.premium_pct - a.premium_pct);
     const forced = !!hi && view.nonpar.some(d => d.specialty === hi && !d.measurable);
 
-    mount("cNonPar", {
-      type: "bar",
-      data: {
-        labels: ok.map(d => d.specialty),
-        datasets: [{
-          label: "Patient exposure vs. participating peers",
-          data: ok.map(d => d.premium_pct),
-          backgroundColor: ok.map(d => hi && d.specialty !== hi
-            ? T().grid
-            : withAlpha(diverging(d.premium_pct > 0 ? 0.75 : -0.75),
-                        opacityFor(reliability(Number(d.n_n))))),
-          borderWidth: 0, borderRadius: 2,
-        }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(false),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: `Specialties with at least ${st.min_nonpar_providers} `
-                     + `non-participating providers`
-                     + (forced ? ` · plus ${hi}, faded as a thin sample` : ""),
-                   align: "start", padding: { bottom: 10 } },
-          tooltip: tooltipOpts({
-            label: c => ` ${pct(c.raw)} ${c.raw < 0 ? "lower" : "higher"} patient exposure`,
-            afterLabel: c => {
-              const d = ok[c.dataIndex];
-              return [`Participating: ${money(d.exp_y)} per beneficiary (${count(d.n_y)} providers)`,
-                      `Non-participating: ${money(d.exp_n)} per beneficiary (${count(d.n_n)} providers)`];
-            },
-          }),
-        },
-        scales: {
-          x: axisOpts("Non-participating exposure vs. participating", v => pct(v, 0)),
-          y: axisOpts(null, null, { grid: { display: false },
-               ticks: { color: T().muted, font: { size: 10.5 } } }),
-        },
-      },
+    /* Three semantics, three channels -- and one of them is now free. Stage 7c put
+       sign on BOTH position and filled/hollow, which was redundant: with a zero
+       rule, position is unambiguous on its own. So filled/hollow carries
+       RELIABILITY, which is the thing this panel most needs to signal, and the
+       1.67:1 alpha fade it replaced is gone for good.
+
+         sign         position across the zero rule
+         reliability  filled (ok) vs hollow (thin / very-thin)
+         selection    the --seal band behind the row, plus the label going to ink */
+    const h2title = `Specialties with at least ${st.min_nonpar_providers} `
+      + `non-participating providers`
+      + (forced ? ` · plus ${hi}, hollow as a thin sample` : "");
+    mountSvg("cNonPar", h2title, {
+      rows: ok,
+      label: (d) => d.specialty,
+      value: (d) => d.premium_pct,
+      fmt: (v) => pct(v, 0),
+      // pct(v, 0) renders -0.615 as "-62%" while this page's own prose
+      // (pinned in panels.test.js) quotes -61.5%. The value column must not
+      // contradict the sentence beside it.
+      fmtValue: (v) => pct(v),
+      signed: true,
+      filled: (d) => isReliable(reliability(Number(d.n_n))),
+      emphasis: (label) => label === hi,
+      family: T().sans,
+      highlight: (d) => !!hi && d.specialty === hi,
+      axisTitle: "Non-participating exposure vs. participating",
+      aria: "Non-participating patient exposure by specialty",
+      tip: (d) => ({
+        label: d.specialty,
+        value: `${pct(d.premium_pct)} ${d.premium_pct < 0 ? "lower" : "higher"} patient exposure`,
+        note: `participating ${money(d.exp_y)}/beneficiary (${count(d.n_y)} providers) · `
+          + `non-participating ${money(d.exp_n)}/beneficiary (${count(d.n_n)} providers)`,
+      }),
     });
 
     // The denominators ARE the story, so they get their own chart rather than a
     // second axis. Log scale: the two cohorts differ by three orders of magnitude.
     const cohort = view.nonpar.slice()
       .sort((a, b) => (b.n_n || 0) - (a.n_n || 0)).slice(0, 12);
-    mount("cNonParAbs", {
-      type: "bar",
-      data: {
-        labels: cohort.map(d => d.specialty),
-        datasets: [
-          { label: "Participating providers", data: cohort.map(d => d.n_y),
-            backgroundColor: T().s1, borderWidth: 0, borderRadius: 2 },
-          { label: "Non-participating providers", data: cohort.map(d => d.n_n),
-            backgroundColor: T().s2, borderWidth: 0, borderRadius: 2 },
-        ],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(true),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Why the ratios are fragile: cohort sizes (log scale)",
-                   align: "start", padding: { bottom: 10 } },
-          tooltip: tooltipOpts({ label: c => ` ${c.dataset.label}: ${count(c.raw)}` }),
-        },
-        scales: {
-          x: axisOpts("Distinct providers", v => count(v),
-                      { type: "logarithmic", min: 1 }),
-          y: axisOpts(null, null, { grid: { display: false },
-               ticks: { color: T().muted, font: { size: 10.5 } } }),
-        },
-      },
-    });
+    // The 4th argument selects the renderer; without it mountSvg would call dotPlot.
+    mountSvg("cNonParAbs", "Why the ratios are fragile: cohort sizes (log scale)", {
+      rows: cohort,
+      label: (d) => d.specialty,
+      a: (d) => d.n_y,
+      b: (d) => d.n_n,
+      fmt: (v) => count(v),
+      axisTitle: "Distinct providers",
+      aria: "Participating and non-participating provider counts by specialty",
+      tip: (d) => ({ label: d.specialty, value: `${count(d.n_y)} participating`,
+                     note: `${count(d.n_n)} non-participating` }),
+      legend: ["Participating providers", "Non-participating providers"],
+    }, "dumbbellPlot");
 
     document.getElementById("h2read").textContent = hero2Read(view);
     document.getElementById("h2caveat").textContent = hero2Caveat(view);
@@ -332,65 +453,80 @@
   /* ── HERO 3 ─────────────────────────────────────────────────────────────── */
   function renderHero3(view) {
     const pts = view.lorenz.map(p => ({ x: p.x, y: p.y }));
-    mount("cLorenz", {
-      type: "scatter",
-      data: {
-        datasets: [
-          { label: "Actual distribution", data: pts, showLine: true, borderColor: T().s1,
-            backgroundColor: T().s1, borderWidth: 2.2, pointRadius: 0, fill: false,
-            tension: 0 },
-          { label: "Perfect equality", data: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
-            showLine: true, borderColor: T().muted, borderWidth: 1.4,
-            borderDash: [5, 4], pointRadius: 0, fill: false },
-        ],
-      },
-      options: {
-        plugins: {
-          legend: legendOpts(true),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: `Lorenz curve — Gini ${view.kpi.gini}`,
-                   align: "start", padding: { bottom: 10 } },
-          tooltip: tooltipOpts({
-            label: c => ` ${pct(c.parsed.x)} of prescribers → ${pct(c.parsed.y)} of drug spend`,
-          }),
-        },
-        scales: {
-          x: axisOpts("Share of drug-billing providers, poorest to richest", v => pct(v, 0),
-                      { min: 0, max: 1 }),
-          y: axisOpts("Cumulative share of drug spend", v => pct(v, 0), { min: 0, max: 1 }),
-        },
-      },
-    });
+    /* A Lorenz curve IS a line, so it stays one. The only encoding decision is the
+       reference diagonal: 1px dashed --ink-3, which is 4.72:1 where the old
+       --ink-muted was 2.96:1 and failed. */
+    (() => {
+      /* Ruling V applies here too, even though these two charts cannot use
+         mountSvg: the viewBox must match the rendered width or the whole SVG scales
+         and every label scales with it. Measured: the host is 606px, so a hardcoded
+         520 would magnify by 1.17 and drift at any other viewport. Read the host. */
+      const host = document.getElementById("cLorenz");
+      const S = V(), t = T();
+      const W = Math.max(320, host.clientWidth || 520), H = 360;
+      const padL = 54, padR = 10, padT = 10, padB = 42;
+      const x = S.scaleLinear([0, 1], [padL, W - padR]);
+      const y = S.scaleLinear([0, 1], [H - padB, padT]);
+      const curve = pts.map((p) => [x(p.x), y(p.y)]);
+      let body = "";
+      for (const tick of S.niceTicks(0, 1, 5)) {
+        body += S.rule(padL, W - padR, y(tick), { stroke: t.grid });
+      }
+      body += S.pathLine([[x(0), y(0)], [x(1), y(1)]],
+        { stroke: t.muted, width: 1, dash: "5 4" });
+      body += S.pathLine(curve, { stroke: t.series, width: 2.2 });
+      /* The curve is one <path>, so there is nothing per-datum to hover. These are
+         invisible hit targets: no fill, no stroke, pointer-events="all" to stay
+         hit-testable anyway. Subsampled to ~24 of the payload's 200 points -- at this
+         width that is a target every ~22px, close enough to feel continuous without
+         200 extra nodes in the DOM.
 
-    const j = view.jcodeTop.slice(0, 15).slice().reverse();
-    mount("cJcode", {
-      type: "bar",
-      data: {
-        labels: j.map(d => d.hcpcs),
-        datasets: [{ label: "National Medicare payment", data: j.map(d => d.pymt),
-                     backgroundColor: T().s3, borderWidth: 0, borderRadius: 2 }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(false),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Largest drug codes by Medicare payment",
-                   align: "start", padding: { bottom: 10 } },
-          tooltip: tooltipOpts({
-            title: c => j[c[0].dataIndex].hcpcs,
-            label: c => ` ${money(c.raw)}`,
-            afterLabel: c => {
-              const d = j[c.dataIndex];
-              return [d.desc, `${count(d.providers)} providers`];
-            },
-          }),
-        },
-        scales: {
-          x: axisOpts("Medicare payment", v => money(v, 0)),
-          y: axisOpts(null, null, { grid: { display: false } }),
-        },
-      },
+         Held back and appended LAST, after the axis and its labels. Drawn in place
+         here they sat under the axis line, and the three targets nearest the origin
+         -- where the curve is flattest and the "bottom 9% hold 0%" reading is the
+         whole point of the chart -- were unhoverable. Hit targets go on top of
+         everything, not just the mark they belong to. */
+      const step = Math.max(1, Math.ceil(pts.length / 24));
+      let hits = "";
+      for (let i = 0; i < pts.length; i += step) {
+        const p = pts[i];
+        const tp = S.tipParts({
+          label: `Bottom ${pct(p.x, 0)} of providers`,
+          value: `${pct(p.y, 0)} of drug spend`,
+        });
+        hits += `<circle cx="${x(p.x).toFixed(2)}" cy="${y(p.y).toFixed(2)}" r="11" `
+          + `fill="none" pointer-events="all"${tp}/>`;
+      }
+      body += S.axisBottom(x, H - padB, (v) => pct(v, 0),
+        { axis: t.axis, muted: t.muted });
+      for (const tick of S.niceTicks(0, 1, 5)) {
+        body += `<text x="${padL - 8}" y="${y(tick) + 3.5}" text-anchor="end" `
+          + `font-size="10.5" fill="${t.muted}">${pct(tick, 0)}</text>`;
+      }
+      body += `<text x="${padL}" y="${H - 6}" font-size="10.5" fill="${t.muted}">`
+        + `Share of drug-billing providers, poorest to richest</text>`;
+      body += hits;   // topmost, so nothing drawn above can swallow a hover
+      host.innerHTML =
+        `<h3 class="figtitle">Lorenz curve — Gini ${view.kpi.gini}</h3>`
+        + `<div class="legend"><span class="lk">`
+        + `<i style="background:${t.series}"></i>Actual distribution</span>`
+        + `<span class="lk"><i style="background:${t.sheet};`
+        + `border-color:${t.muted}"></i>Perfect equality</span></div>`
+        + S.frame(W, H, body,
+            { aria: `Lorenz curve of drug spend concentration, Gini ${view.kpi.gini}` });
+    })();
+
+    const j = view.jcodeTop.slice(0, 15);
+    mountSvg("cJcode", "Largest drug codes by Medicare payment", {
+      rows: j,
+      label: (d) => d.hcpcs,
+      value: (d) => d.pymt,
+      fmt: moneyTick,
+      fmtValue: (v) => money(v),
+      axisTitle: "Medicare payment",
+      aria: "Largest drug codes by Medicare payment",
+      tip: (d) => ({ label: d.hcpcs, value: money(d.pymt),
+                     note: `${count(d.providers)} providers` }),
     });
 
     document.getElementById("h3read").textContent = hero3Read(view);
@@ -433,39 +569,70 @@
     const rows = view.credentials.filter(d => d.shared)
       .filter(d => tiers.some(t => d[t] !== null && d[t] !== undefined))
       .sort((a, b) => a.hcpcs.localeCompare(b.hcpcs));
-    const colors = { md: T().s1, np: T().s2, pa: T().s3, spec: T().s4 };
+    /* A HEATMAP, not a grouped bar chart. Four credential tiers are non-ordinal
+       categories, and the largest mutually->=3:1 subset of a single blue ramp is two
+       steps -- which is why index.html used to carry a comment admitting two of these
+       four series failed 3:1. Drawing the matrix AS a matrix removes the problem
+       instead of working around it: position carries the category, the ramp carries
+       the value, and each cell prints its own number.
 
-    mount("cCred", {
-      type: "bar",
-      data: {
-        labels: rows.map(d => d.hcpcs),
-        datasets: tiers.map(t => ({
-          label: TIER_LABELS[t], data: rows.map(d => d[t]),
-          backgroundColor: colors[t], borderWidth: 0, borderRadius: 2,
-        })),
-      },
-      options: {
-        plugins: {
-          legend: legendOpts(true),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Markup ratio on shared evaluation & management codes",
-                   align: "start", padding: { bottom: 10 } },
-          tooltip: tooltipOpts({
-            title: c => {
-              const d = rows[c[0].dataIndex];
-              return `${d.hcpcs} — ${d.desc}`;
-            },
-            label: c => ` ${c.dataset.label}: ${c.raw === null ? "no data"
-              : c.raw.toFixed(2) + "x allowed amount"}`,
-          }),
-        },
-        scales: {
-          x: axisOpts("HCPCS code", null, { grid: { display: false } }),
-          y: axisOpts("Submitted charge ÷ Medicare allowed", v => v.toFixed(1) + "x",
-                      { beginAtZero: true }),
-        },
-      },
-    });
+       Rendered as a real HTML grid rather than on a canvas, so the 24 values are
+       selectable text, reachable by a screen reader through role="table", and printable.
+       #cCred is therefore a <div>, not a <canvas>; it is no longer mounted as a chart.
+
+       The plan also called for hatching thin cells, as the reference hatches n<200.
+       Not implemented, because it is not measurable here: gold_hero_credentials_markup
+       carries no per-cell provider count, only the ratio. Inventing a threshold would
+       be a guardrail that asserts something nobody measured. */
+    const cells = rows.flatMap(d => tiers.map(t => d[t]))
+      .filter(v => v !== null && v !== undefined);
+    const lo = Math.min(...cells), hi = Math.max(...cells);
+    // Span the OBSERVED range, not zero to max: every value sits between 1.66x and
+    // 2.84x, so a zero-based ramp would crush all 24 cells into the top two bins.
+    const span = hi - lo || 1;
+    const ramp = T().ramp;
+    const cellBin = (v) => Math.max(0, Math.min(3, Math.floor((v - lo) / span * 4)));
+
+    const head = `<div class="hmrow hmhead" role="row">`
+      + `<span role="columnheader">Code</span>`
+      + tiers.map(t => `<span role="columnheader">${esc(TIER_LABELS[t])}</span>`).join("")
+      + `</div>`;
+    const body = rows.map(d => `<div class="hmrow" role="row">`
+      + `<span class="hmcode" role="rowheader" aria-label="${esc(d.hcpcs)} · ${esc(d.desc)}"`
+      + ` data-tip-label="${esc(d.hcpcs)}" data-tip-value="${esc(d.desc)}">${esc(d.hcpcs)}</span>`
+      + tiers.map(t => {
+          const v = d[t];
+          if (v === null || v === undefined) {
+            return `<span class="hmcell hmna" role="cell">&mdash;</span>`;
+          }
+          const bin = cellBin(v);
+          /* The heatmap is HTML, not SVG, so it is the one chart tipParts() cannot
+             build. It carries the same three attributes by hand instead, and
+             aria-label replaces the title it used to have: in HTML the title
+             ATTRIBUTE is the native tooltip, so keeping it would draw the grey
+             system box underneath the styled one. aria-label announces the same
+             thing and renders nothing -- and it is the better announcement anyway,
+             since the cell's own text is only "2.06x". */
+          const label = `${esc(d.hcpcs)} · ${esc(TIER_LABELS[t])} · `
+            + `${v.toFixed(2)}x allowed`;
+          return `<span class="hmcell" role="cell" style="background:${ramp[bin]};`
+            + `color:${rampInk(bin)}" aria-label="${label}" `
+            + `data-tip-label="${esc(d.hcpcs)}" `
+            + `data-tip-value="${v.toFixed(2)}x allowed" `
+            + `data-tip-note="${esc(TIER_LABELS[t])}">`
+            + `${v.toFixed(2)}x</span>`;
+        }).join("")
+      + `</div>`).join("");
+
+    document.getElementById("cCred").innerHTML = rows.length
+      ? `<div class="hm" role="table" aria-label="Markup ratio by HCPCS code and `
+        + `credential tier" style="--hmcols:${tiers.length}">${head}${body}</div>`
+        + `<div class="legend"><span class="lgroup">Submitted &divide; allowed</span>`
+        + ramp.map((c, i) => `<span class="lk"><i style="background:${c}"></i>`
+            + `${(lo + span * (i + 1) / 4).toFixed(2)}x</span>`).join("")
+        + `</div>`
+      : `<p class="empty">No shared code has coverage in more than one credential tier `
+        + `under this filter, so there is no matrix to draw.</p>`;
 
     const th = ["Code", "Description"].concat(tiers.map(t => TIER_LABELS[t]));
     document.getElementById("tCred").innerHTML =
@@ -519,83 +686,73 @@
     const maxV = Math.max(...rows.map(d => d.f_svcs || 0)) || 1;
     const ss = view.siteStats;
 
-    mount("cSite", {
-      type: "bubble",
-      data: {
-        datasets: [
-          { label: "Procedure code (bubble = facility volume)",
-            data: rows.map(d => ({ x: d.o_pymt, y: d.f_pymt,
-              r: 4 + 14 * Math.sqrt((d.f_svcs || 0) / maxV) })),
-            backgroundColor: T().s1 + "b0", borderColor: T().s1, borderWidth: 1 },
-          { label: "Equal payment in both settings", type: "line",
-            data: [{ x: 0, y: 0 }, { x: lim, y: lim }],
-            borderColor: T().muted, borderWidth: 1.4, borderDash: [5, 4],
-            pointRadius: 0, fill: false },
-        ],
-      },
-      options: {
-        plugins: {
-          legend: legendOpts(true),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "The 60 highest-volume codes billed in both settings",
-                   align: "start", padding: { bottom: 10 } },
-          tooltip: tooltipOpts({
-            title: c => c[0].datasetIndex === 0 ? rows[c[0].dataIndex].hcpcs : "",
-            label: c => {
-              if (c.datasetIndex !== 0) return "";
-              const d = rows[c.dataIndex];
-              return [` Facility: ${money(d.f_pymt)} per service`,
-                      ` Office: ${money(d.o_pymt)} per service`,
-                      ` Facility pays ${d.ratio === null ? "—"
-                          : d.ratio.toFixed(2) + "x"} the office rate`,
-                      ` ${count(d.f_svcs)} facility services`];
-            },
-            afterBody: c => c[0].datasetIndex === 0
-              ? rows[c[0].dataIndex].desc.slice(0, 70) : "",
-          }),
-        },
-        scales: {
-          x: axisOpts("Office (non-facility) payment per service", v => money(v, 0),
-                      { min: 0, max: lim }),
-          y: axisOpts("Facility payment per service", v => money(v, 0), { min: 0, max: lim }),
-        },
-      },
-    });
+    (() => {
+      // Ruling V: read the host rather than hardcoding, same as cLorenz above.
+      const host = document.getElementById("cSite");
+      const S = V(), t = T();
+      const W = Math.max(320, host.clientWidth || 520), H = 430;
+      const padL = 62, padR = 12, padT = 10, padB = 44;
+      const x = S.scaleLinear([0, lim], [padL, W - padR]);
+      const y = S.scaleLinear([0, lim], [H - padB, padT]);
+      let body = "";
+      for (const tick of x.ticks(5)) {
+        body += S.rule(padL, W - padR, y(tick), { stroke: t.grid });
+      }
+      body += S.pathLine([[x(0), y(0)], [x(lim), y(lim)]],
+        { stroke: t.muted, width: 1, dash: "5 4" });
+      for (const d of rows) {
+        body += S.bubble(x(d.o_pymt), y(d.f_pymt),
+          4 + 14 * Math.sqrt((d.f_svcs || 0) / maxV),
+          { fill: t.series + "b0", stroke: t.series,
+            tip: { label: d.hcpcs,
+                   value: `facility ${money(d.f_pymt)} · office ${money(d.o_pymt)}`,
+                   note: `${count(d.f_svcs)} facility services` } });
+      }
+      body += S.axisBottom(x, H - padB, moneyTick,
+        { axis: t.axis, muted: t.muted });
+      for (const tick of y.ticks(5)) {
+        body += `<text x="${padL - 8}" y="${y(tick) + 3.5}" text-anchor="end" `
+          + `font-size="10.5" fill="${t.muted}">${moneyTick(tick)}</text>`;
+      }
+      body += `<text x="${padL}" y="${H - 6}" font-size="10.5" fill="${t.muted}">`
+        + `Office (non-facility) payment per service</text>`;
+      host.innerHTML =
+        `<h3 class="figtitle">The 60 highest-volume codes billed in both `
+        + `settings</h3>`
+        + S.frame(W, H, body,
+            { aria: "Facility against office payment per service, bubble area is facility volume" });
+    })();
 
-    // Both directions on one diverging axis -- showing only the positive tail is
+    // Both directions on one signed axis -- showing only the positive tail is
     // how the original "savings" framing went wrong.
+    /* The two slices are the largest and smallest savings of the SAME array, so a
+       cohort with fewer than 16 codes puts one code in both. scaleBand's index-aware
+       band draws it twice, same value, with contradictory tip notes -- "facility
+       costs more" above "office costs more". De-dup by code; a live filter can
+       easily return a short list. */
+    const seenCode = new Set();
     const bar = view.siteBarNeg.slice(0, 8).concat(view.siteBarPos.slice(0, 8))
-      .sort((a, b) => (a.savings || 0) - (b.savings || 0));
-    mount("cSiteBar", {
-      type: "bar",
-      data: {
-        labels: bar.map(d => d.hcpcs),
-        datasets: [{
-          label: "Facility minus office, times facility volume",
-          data: bar.map(d => d.savings),
-          backgroundColor: bar.map(d => diverging((d.savings || 0) >= 0 ? 0.75 : -0.75)),
-          borderWidth: 0, borderRadius: 2,
-        }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: legendOpts(false),
-          title: { display: true, color: T().ink1, font: { size: 13, weight: "600" },
-                   text: "Largest differentials, both directions",
-                   align: "start", padding: { bottom: 10 } },
-          tooltip: tooltipOpts({
-            title: c => bar[c[0].dataIndex].hcpcs,
-            label: c => ` ${c.raw >= 0 ? "Facility costs more: " : "Office costs more: "}`
-              + `${money(Math.abs(c.raw))}`,
-            afterLabel: c => bar[c.dataIndex].desc.slice(0, 70),
-          }),
-        },
-        scales: {
-          x: axisOpts("Facility premium (negative = office pays more)", v => money(v, 0)),
-          y: axisOpts(null, null, { grid: { display: false } }),
-        },
-      },
+      .filter((d) => {
+        if (seenCode.has(d.hcpcs)) return false;
+        seenCode.add(d.hcpcs);
+        return true;
+      })
+      .sort((a, b) => (b.savings || 0) - (a.savings || 0));
+    mountSvg("cSiteBar", "Largest differentials, both directions", {
+      rows: bar,
+      label: (d) => d.hcpcs,
+      value: (d) => d.savings,
+      fmt: moneyTick,
+      fmtValue: (v) => money(v),
+      signed: true,
+      axisTitle: "Facility premium (negative = office pays more)",
+      aria: "Largest site-of-service differentials in both directions",
+      tip: (d) => ({
+        label: d.hcpcs,
+        value: `${(d.savings || 0) >= 0 ? "facility costs more" : "office costs more"} `
+          + `${money(Math.abs(d.savings || 0))}`,
+        note: d.desc,
+      }),
     });
 
     document.getElementById("h5read").textContent =
@@ -701,10 +858,10 @@
 
   root.MD = root.MD || {};
   root.MD.panels = {
-    TILES, TIER_LABELS,
+    TIER_LABELS, binOf, pathBox, rampInk,
     renderKpis: renderStatics,   // alias: the ribbon and header render together
     renderHero1, renderHero2, renderHero3, renderHero4, renderHero5,
-    renderProviders, renderStatics, geoByState,
+    renderProviders, renderStatics, geoByState, mountSvg,
     // Exported for docs/js/panels.test.js: these are the only DOM-free parts of
     // this module, and the 1- and 0-cohort prose is otherwise reachable only by a
     // human clicking through filters on a live page.

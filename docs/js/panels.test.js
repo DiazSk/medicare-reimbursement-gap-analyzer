@@ -16,15 +16,13 @@
    2. Exercise the 1-cohort and 0-cohort branches, which only a human clicking
       through filters on a live page could otherwise reach.
 
-   panels.js needs a Chart global at load (charts.js writes Chart.defaults), but
-   the readouts themselves are DOM-free, which is why they are exported. */
+   The readouts themselves are DOM-free, which is why they are exported. */
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 
 global.window = {};
-global.Chart = { defaults: { font: {}, animation: false, maintainAspectRatio: false } };
 for (const f of ["format.js", "guardrails.js", "charts.js", "panels.js"]) {
   eval(fs.readFileSync(path.join(__dirname, f), "utf8"));
 }
@@ -216,4 +214,125 @@ test("hero 3 lets the Gini pick its own adjective", () => {
   // The national sentence would have called this "extreme concentration" too.
   assert.match(at(0.31), /is a relatively even distribution/);
   assert.doesNotMatch(at(0.31), /extreme/);
+});
+
+/* ── choropleth helpers ─────────────────────────────────────────────────────
+   Both are pure, and both encode a correctness claim that is invisible on screen:
+   pathBox decides where a label lands, and binOf decides which of four fills a state
+   gets. A silent off-by-one in either is a map that looks fine and is wrong. */
+
+test("pathBox reads a bounding box straight off the path's coordinate stream", () => {
+  // Every command in us-states.js is M or L with absolute x,y pairs, so the numbers
+  // alternate x,y and no path parser is needed. That assumption is what this pins.
+  const box = P.pathBox("M10 20L30 60L50 40");
+  assert.deepEqual(box, { cx: 30, cy: 40, w: 40, h: 40 });
+});
+
+test("pathBox handles the negative x the albers geometry actually starts at", () => {
+  // Alaska begins near x = -58. A box that clamped at 0 would mis-place its label.
+  const box = P.pathBox("M-58 500L-20 520");
+  assert.equal(box.cx, -39);
+  assert.ok(box.w > 0, "a negative-origin path must still have positive width");
+});
+
+test("pathBox returns null for a path with no coordinates", () => {
+  assert.equal(P.pathBox(""), null);
+});
+
+test("binOf quantises magnitude into exactly four bins, sign-independent", () => {
+  const bound = 10;
+  // Bin edges at 25/50/75% of the bound.
+  assert.equal(P.binOf(0, bound), 0);
+  assert.equal(P.binOf(2.4, bound), 0);
+  assert.equal(P.binOf(2.5, bound), 1);
+  assert.equal(P.binOf(4.9, bound), 1);
+  assert.equal(P.binOf(5.0, bound), 2);
+  assert.equal(P.binOf(7.4, bound), 2);
+  assert.equal(P.binOf(7.5, bound), 3);
+  assert.equal(P.binOf(10, bound), 3);
+  // Sign must not change the bin: it is carried by fill texture, not by the ramp.
+  for (const v of [2.5, 5.0, 7.5, 9.9]) {
+    assert.equal(P.binOf(-v, bound), P.binOf(v, bound),
+      `binOf(${-v}) and binOf(${v}) must land in the same bin`);
+  }
+});
+
+test("binOf clamps beyond the bound instead of indexing off the ramp", () => {
+  // The bound is a p95, so roughly 5% of states exceed it by construction -- Alaska
+  // at over twice the next state. An unclamped index would read ramp[4] === undefined
+  // and paint those states with fill="undefined".
+  const bound = 10;
+  assert.equal(P.binOf(10.0001, bound), 3);
+  assert.equal(P.binOf(1e9, bound), 3);
+  assert.equal(P.binOf(-1e9, bound), 3);
+});
+
+test("rampInk gives every ramp bin a label ink that actually passes 4.5:1", () => {
+  /* The bug this pins: inkOn()'s single 0.4 luminance threshold picks WHITE on r300,
+     whose luminance is 0.3694, and white on r300 is 2.50:1. The plan asserted that
+     quantising made that band unreachable -- it does not, because r300 is one of the
+     four bins. Caught by computing the ratios rather than trusting the table.
+
+     Rather than hardcode the expected inks, this recomputes the contrast and asserts
+     rampInk picked the better of the two. That way it still holds if the ramp is
+     retuned. */
+  const RAMP = ["#cde2fb", "#6da7ec", "#256abf", "#0d366b"];
+  const lum = (hex) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a, b) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const INK = "#16181a", WHITE = "#ffffff";
+
+  for (let bin = 0; bin < RAMP.length; bin++) {
+    const fill = RAMP[bin];
+    const picked = P.rampInk(bin) === WHITE ? WHITE : INK;
+    const got = ratio(picked, fill);
+    const best = Math.max(ratio(INK, fill), ratio(WHITE, fill));
+    assert.ok(got >= 4.5,
+      `bin ${bin} (${fill}) label ink is ${got.toFixed(2)}:1, below AA`);
+    assert.ok(Math.abs(got - best) < 0.01,
+      `bin ${bin} (${fill}) picked the worse ink: ${got.toFixed(2)}:1 when ${best.toFixed(2)}:1 was available`);
+  }
+});
+
+test("rampInk degrades to the dark-fill ink past the end of the ramp", () => {
+  /* binOf clamps to 0..3, but a future caller might not. Asserted as a CHOICE rather
+     than as a truthy value: this harness has no document, so readTokens() never ran and
+     T().ink1 is undefined -- which is exactly the dark branch. Checking truthiness here
+     would test the harness, not the mapping. */
+  assert.equal(P.rampInk(99), P.rampInk(3),
+    "an out-of-range bin must behave like the darkest fill, not fall through to the dark ink");
+  assert.notEqual(P.rampInk(0), P.rampInk(3),
+    "bins 0 and 3 must not share an ink -- that would mean one of them fails contrast");
+});
+
+test("mountSvg dispatches to the named renderer", () => {
+  // Task 7's cNonParAbs needs dumbbellPlot to get the same width injection as
+  // dotPlot; a helper hard-wired to dotPlot would re-open the footgun it closes.
+  const calls = [];
+  const realSvg = global.window.MD.svg;
+  global.window.MD.svg = Object.assign({}, realSvg, {
+    dotPlot: (s) => { calls.push(["dotPlot", s.width]); return "<svg/>"; },
+    dumbbellPlot: (s) => { calls.push(["dumbbellPlot", s.width]); return "<svg/>"; },
+  });
+  const hadDoc = Object.prototype.hasOwnProperty.call(global, "document");
+  const realDoc = global.document;
+  try {
+    const host = { clientWidth: 480, innerHTML: "" };
+    global.document = { getElementById: () => host };
+
+    P.mountSvg("x", null, { rows: [] });
+    P.mountSvg("y", null, { rows: [] }, "dumbbellPlot");
+
+    assert.deepEqual(calls, [["dotPlot", 480], ["dumbbellPlot", 480]],
+      "the 4th argument must select the renderer, and both must receive the host width");
+  } finally {
+    global.window.MD.svg = realSvg;
+    if (hadDoc) global.document = realDoc; else delete global.document;
+  }
 });

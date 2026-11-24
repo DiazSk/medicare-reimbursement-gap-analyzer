@@ -36,21 +36,43 @@ test("pct scales by 100 with configurable precision", () => {
   assert.equal(F.pct(null), "—");
 });
 
-test("diverging clamps out-of-range inputs instead of extrapolating", () => {
-  const stops = ["#184f95", "#6da7ec", "#f0efec", "#e87272", "#b02525"];
-  assert.equal(F.diverging(-5, stops), F.diverging(-1, stops));
-  assert.equal(F.diverging(5, stops), F.diverging(1, stops));
-  assert.match(F.diverging(0, stops), /^rgb\(\d+,\d+,\d+\)$/);
-});
-
-test("inkOn picks dark ink on light fills and light ink on dark fills", () => {
-  assert.equal(F.inkOn("rgb(255,255,255)"), "#0b0b0b");
-  assert.equal(F.inkOn("rgb(0,0,0)"), "#ffffff");
-});
-
 test("quantile indexes a pre-sorted array and clamps at the ends", () => {
   const xs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   assert.equal(F.quantile(xs, 0), 1);
   assert.equal(F.quantile(xs, 1), 10);
   assert.equal(F.quantile([], 0.5), 0);
+});
+
+test("money honours its digits argument below 1000, not just above", () => {
+  // The final branch used to hardcode toFixed(2), so an axis passing 0 still got
+  // "$200.00". That reached three axes before anyone noticed.
+  assert.equal(F.money(200, 0), "$200");
+  assert.equal(F.money(0, 0), "$0");
+  assert.equal(F.money(503.53, 0), "$504");
+  assert.equal(F.money(12.5, 1), "$12.5");
+  // The default is unchanged.
+  assert.equal(F.money(12.5), "$12.50");
+  // Explicit digits is also how currency asks for cents (panels.js passes 2 for
+  // per-beneficiary figures); a round value must keep them.
+  assert.equal(F.money(12, 2), "$12.00");
+  assert.equal(F.money(100, 2), "$100.00");
+  assert.equal(F.money(0, 2), "$0.00");
+});
+
+test("moneyTick gives axes the shortest truthful label", () => {
+  // money(1.5e9, 0) rendered "$2B" -- distinct from its neighbours, so the
+  // duplicate-label fallback never fired, and wrong by half a billion.
+  assert.equal(F.moneyTick(1.5e9), "$1.5B");
+  assert.equal(F.moneyTick(1e9), "$1B");       // "1.0B" -> "1B"
+  assert.equal(F.moneyTick(5e8), "$500M");     // "500.0M" -> "500M"
+  assert.equal(F.moneyTick(0), "$0");          // "0.0" -> "0"
+  assert.equal(F.moneyTick(200), "$200");
+  assert.equal(F.moneyTick(-1.5e9), "-$1.5B");
+  assert.equal(F.moneyTick(-0), "$0");
+  assert.equal(F.moneyTick(null), "—");
+  assert.equal(F.moneyTick(NaN), "—");
+  assert.equal(F.moneyTick(Infinity), "—");
+  // The trim belongs to the axis, not to money(): currency keeps its cents.
+  assert.equal(F.money(2e9), "$2.00B");
+  assert.equal(F.money(12.5), "$12.50");
 });

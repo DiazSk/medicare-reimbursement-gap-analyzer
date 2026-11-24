@@ -15,6 +15,7 @@
   const E = () => root.MD.engine;
   const F = () => root.MD.format;
   const C = () => root.MD.charts;
+  const S = () => root.MD.svg;
   const PL = () => root.MD.permalink;
 
   const DIMENSIONS = [
@@ -31,11 +32,23 @@
 
   // Ratios are SUM/SUM, never AVG(ratio) -- see powerbi/MEASURES.md.
   const MEASURES = [
-    { key: "paid",   label: "Medicare paid",     sql: "SUM(Tot_Mdcr_Pymt_Amt_sum)", format: (v) => F().money(v) },
-    { key: "sbmtd",  label: "Submitted charges", sql: "SUM(Tot_Sbmtd_Chrg_sum)",    format: (v) => F().money(v) },
-    { key: "alowd",  label: "Medicare allowed",  sql: "SUM(Tot_Mdcr_Alowd_Amt_sum)", format: (v) => F().money(v) },
-    { key: "svcs",   label: "Services",          sql: "SUM(Tot_Srvcs_sum)",          format: (v) => F().count(v) },
-    { key: "benes",  label: "Beneficiary proxy", sql: "SUM(Tot_Benes_sum)",          format: (v) => F().count(v) },
+    { key: "paid",   label: "Medicare paid",     sql: "SUM(Tot_Mdcr_Pymt_Amt_sum)", format: (v) => F().money(v),
+      axisFmt: (v) => F().moneyTick(v) },
+    { key: "sbmtd",  label: "Submitted charges", sql: "SUM(Tot_Sbmtd_Chrg_sum)",    format: (v) => F().money(v),
+      axisFmt: (v) => F().moneyTick(v) },
+    { key: "alowd",  label: "Medicare allowed",  sql: "SUM(Tot_Mdcr_Alowd_Amt_sum)", format: (v) => F().money(v),
+      axisFmt: (v) => F().moneyTick(v) },
+    /* count() rounds to whole units, which is right for a datum and wrong for an
+       axis: a narrow domain ticks at 3, 3.5, 4, 4.5, 5 and count() labels them
+       3, 4, 4, 5, 5 -- a tick labelled 4 sitting at 3.5. axisBottom drops the
+       repeat, but it keeps the first of each run, so the survivor is the one in
+       the wrong place. A tick is a position on a continuous scale, so let it
+       carry its half: "3.5" is true where "4" is not. Large domains never reach
+       a fraction and are unchanged. */
+    { key: "svcs",   label: "Services",          sql: "SUM(Tot_Srvcs_sum)",          format: (v) => F().count(v),
+      axisFmt: (v) => v.toLocaleString("en-US", { maximumFractionDigits: 1 }) },
+    { key: "benes",  label: "Beneficiary proxy", sql: "SUM(Tot_Benes_sum)",          format: (v) => F().count(v),
+      axisFmt: (v) => v.toLocaleString("en-US", { maximumFractionDigits: 1 }) },
     // `ratio: true` marks the two measures where SUM/SUM can divide two tiny
     // numbers at a fine grain (one rare procedure code, a near-zero allowed
     // amount) and produce an arithmetically correct but startling-looking
@@ -49,8 +62,12 @@
     { key: "rate",   label: "Payment rate", ratio: true,
       sql: "SUM(Tot_Mdcr_Pymt_Amt_sum) / NULLIF(SUM(Tot_Mdcr_Alowd_Amt_sum), 0)",
       format: (v) => F().pct(v, 1) },
-    { key: "geoprem", label: "Geographic premium",
-      sql: "SUM(Tot_Mdcr_Pymt_Amt_sum) - SUM(Tot_Mdcr_Stdzd_Amt_sum)", format: (v) => F().money(v) },
+    // signed: the only measure that can go negative (Rural is below zero), so the plot
+    // draws a zero rule and hollows the negatives. Every other measure is a sum of
+    // non-negative amounts or a positive ratio.
+    { key: "geoprem", label: "Geographic premium", signed: true,
+      sql: "SUM(Tot_Mdcr_Pymt_Amt_sum) - SUM(Tot_Mdcr_Stdzd_Amt_sum)", format: (v) => F().money(v),
+      axisFmt: (v) => F().moneyTick(v) },
   ];
 
   const qlit = (v) => `'${String(v).replace(/'/g, "''")}'`;
@@ -130,6 +147,31 @@
     const m = MEASURES.find((x) => x.key === measure);
     renderTable(data, rows, cols, m);
     renderChart(data, rows, cols, m);
+    lastChart = { data, rows, cols, m };
+  }
+
+  /* dotPlot writes a viewBox from the host's width at render time and nothing
+     re-reads it, so the chart scales against a stale frame until the next query.
+     Re-drawing from the rows already in hand rather than re-running run(): a
+     window drag must not re-query the cube.
+
+     Width only -- a phone fires resize when the URL bar hides, and a height-only
+     change moves nothing here. Debounced, because resize fires continuously. */
+  let lastChart = null;
+  let lastWidth = root.innerWidth;
+  let resizeTimer = null;
+
+  function wireResize() {
+    root.addEventListener("resize", () => {
+      if (root.innerWidth === lastWidth) return;
+      lastWidth = root.innerWidth;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (!lastChart) return;
+        const c = lastChart;
+        renderChart(c.data, c.rows, c.cols, c.m);
+      }, 160);
+    }, { passive: true });
   }
 
   // Column defs carry their own alignment rather than inferring it from
@@ -169,35 +211,38 @@
     return `${String(r[rows]).slice(0, budget)} · ${String(r[cols]).slice(0, budget)}`;
   }
 
+  const dimLabel = (k) => (DIMENSIONS.find((d) => d.key === k) || { label: k }).label;
+
+  // The explorer draws the same dot plot as the findings page.
   function renderChart(data, rows, cols, m) {
-    const T = C().tokens();
-    const top = data.slice(0, 25).reverse();
-    C().mount("pChart", {
-      type: "bar",
-      data: {
-        labels: top.map((r) => chartLabel(r, rows, cols)),
-        datasets: [{
-          label: m.label, data: top.map((r) => r.value),
-          backgroundColor: T.s1, borderWidth: 0, borderRadius: 2,
-        }],
-      },
-      options: {
-        // Horizontal once labels are many -- vertical ticks become unreadable.
-        indexAxis: top.length > 8 ? "y" : "x",
-        plugins: {
-          legend: C().legendOpts(false),
-          tooltip: C().tooltipOpts({ label: (c) => ` ${m.format(c.raw)}` }),
-        },
-        scales: {
-          x: C().axisOpts(m.label, (v) => m.format(v)),
-          y: C().axisOpts(null, null, { grid: { display: false } }),
-        },
-      },
+    /* Orientation is unconditional: the old code drew vertically at 8 rows or fewer, but
+       pivot labels are long category strings that read better horizontally, and dotPlot
+       has no vertical mode. buildSql orders by value DESC and scaleBand puts index 0 at
+       the top, so there is deliberately no .reverse(). */
+    const top = data.slice(0, 25);
+    /* explore.html does not load panels.js, so mountSvg is unavailable and the host is
+       read directly. The width is NOT optional -- omitting it gives a 760-wide viewBox
+       in a smaller box and sub-8px labels. */
+    const host = document.getElementById("pChart");
+    host.innerHTML = S().dotPlot({
+      t: C().tokens(),
+      width: host.clientWidth || 760,
+      rows: top,
+      label: (r) => chartLabel(r, rows, cols),
+      value: (r) => r.value,
+      fmt: (v) => (m.axisFmt || m.format)(v),   // terse ticks; fmtValue keeps the cents
+      fmtValue: (v) => m.format(v),
+      signed: !!m.signed,
+      axisTitle: m.label,
+      aria: cols ? `${m.label} by ${dimLabel(rows)} and ${dimLabel(cols)}`
+                 : `${m.label} by ${dimLabel(rows)}`,
+      tip: (r) => ({ label: chartLabel(r, rows, cols), value: m.format(r.value) }),
     });
   }
 
   async function init() {
     C().readTokens();
+    wireResize();
     fill(document.getElementById("pRows"), DIMENSIONS);
     fill(document.getElementById("pCols"), DIMENSIONS, true);
     fill(document.getElementById("pMeasure"), MEASURES);
@@ -219,12 +264,6 @@
     pFilterDim.value = pick(pFilterDim, saved.filterDim, pFilterDim.value);
 
     document.getElementById("pRun").onclick = run;
-    document.getElementById("theme").onclick = () => {
-      const dark = document.documentElement.getAttribute("data-theme") === "dark";
-      document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
-      C().readTokens();
-      run();
-    };
 
     const status = document.getElementById("pStatus");
     if (!E().isSupported()) {
@@ -264,6 +303,10 @@
       const pFilterVal = document.getElementById("pFilterVal");
       pFilterVal.value = pick(pFilterVal, saved.filterVal, "all");
 
+      // Kept from before the SVG port, where it protected Chart.js's one-shot label
+      // measurement. The chart no longer needs it (svg.js sizes from character count).
+      // NOT tested: whether removing it makes the table reflow after the font swap.
+      if (document.fonts) await document.fonts.ready;
       await run();
     } catch (err) {
       status.textContent = `Could not load the query engine: ${err.message}`;

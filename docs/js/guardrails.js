@@ -30,8 +30,13 @@
       : `n=${shown} · below CMS's suppression floor`;
   }
 
-  const OPACITY = { ok: 1, thin: 0.55, "very-thin": 0.4 };
-  const opacityFor = (level) => OPACITY[level] ?? 1;
+  /* The dot plot's filled/hollow channel: a reliable cohort is a filled dot, a thin or
+     very-thin one is hollow. The mark keeps a 1px --series outline either way, which
+     holds the silhouette at 4.03:1 -- so the warning reads as a warning without making
+     the warned number harder to see. (Reliability used to ride on opacity, which put
+     both warning states under 2.1:1 against the sheet -- exactly backwards.) An unknown
+     level is NOT reliable. */
+  const isReliable = (level) => level === "ok";
 
   function applyBadge(el, n) {
     if (!el) return;
@@ -42,5 +47,6 @@
   }
 
   root.MD = root.MD || {};
-  root.MD.guardrails = { RELIABLE, WEAK, reliability, badgeText, opacityFor, applyBadge };
+  root.MD.guardrails = { RELIABLE, WEAK, reliability, badgeText,
+                         isReliable, applyBadge };
 })(typeof window !== "undefined" ? window : globalThis);

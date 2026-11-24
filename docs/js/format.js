@@ -10,8 +10,15 @@
     if (a >= 1e9) return s + (a / 1e9).toFixed(digits ?? 2) + "B";
     if (a >= 1e6) return s + (a / 1e6).toFixed(digits ?? 1) + "M";
     if (a >= 1e3) return s + (a / 1e3).toFixed(digits ?? 1) + "K";
-    return s + a.toFixed(2);
+    return s + a.toFixed(digits ?? 2);
   }
+
+  /* Axis ticks want the shortest TRUTHFUL label. money(v, 0) rendered 1.5e9 as "$2B":
+     wrong by half a billion, and distinct from "$1B", so axisBottom's duplicate-label
+     fallback never fired on it. One decimal fixes the truth; trimming a trailing ".0"
+     keeps the round ticks short. Separate from money() because the trim belongs to the
+     caller's intent -- money(12, 2) is currency and must keep its cents. */
+  const moneyTick = (v) => money(v, 1).replace(/\.0+(?=[BMK]?$)/, "");
 
   function count(v) {
     if (v === null || v === undefined || !isFinite(v)) return "—";
@@ -23,36 +30,11 @@
     return (v * 100).toFixed(d ?? 1) + "%";
   }
 
-  function hex2rgb(h) {
-    h = h.replace("#", "");
-    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16),
-            parseInt(h.slice(4, 6), 16)];
-  }
-
-  // t in [-1, 1]; clamped, never extrapolated past the end stops.
-  function diverging(t, stopHexes) {
-    const stops = stopHexes.map(hex2rgb);
-    const p = (Math.max(-1, Math.min(1, t)) + 1) / 2 * (stops.length - 1);
-    const i = Math.min(stops.length - 2, Math.floor(p)), f = p - i;
-    const c = stops[i].map((v, k) => Math.round(v + (stops[i + 1][k] - v) * f));
-    return `rgb(${c[0]},${c[1]},${c[2]})`;
-  }
-
-  // Relative luminance decides label ink, so tile text stays legible at both extremes.
-  function inkOn(rgb) {
-    const [r, g, b] = rgb.match(/\d+/g).map(Number).map((v) => {
-      v /= 255;
-      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-    });
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#0b0b0b" : "#ffffff";
-  }
-
   function quantile(sorted, q) {
     if (!sorted.length) return 0;
     return sorted[Math.min(sorted.length - 1, Math.round(q * (sorted.length - 1)))];
   }
 
   root.MD = root.MD || {};
-  root.MD.format = { money, count, pct, hex2rgb, diverging, inkOn, quantile };
+  root.MD.format = { money, moneyTick, count, pct, quantile };
 })(typeof window !== "undefined" ? window : globalThis);

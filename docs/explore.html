@@ -1,15 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Explore — Medicare Reimbursement Gap</title>
 <meta name="description" content="Query 9.66M rows of CMS Medicare physician claims in your browser.">
-<!-- Vendored, not CDN-loaded -- see docs/index.html's head comment for why.
-     Zero external requests on first paint, verified with
-     performance.getEntriesByType('resource'). -->
-<script src="js/chart.umd.min.js"></script>
-<link rel="stylesheet" href="css/dash.css">
+<link rel="stylesheet" href="css/dash.css?v=9b9e3f48">
 </head>
 <body>
 <div class="wrap">
@@ -21,28 +17,9 @@
       Nothing is sent to a server — DuckDB runs locally in WebAssembly.</p>
     <p class="prov"><a href="index.html">← Back to the findings</a></p>
   </div>
-  <button class="toggle" id="theme" type="button">Switch theme</button>
 </header>
 
-<section class="card">
-  <div class="eyebrow"><span class="n">Pivot</span> Build your own breakdown</div>
-  <div class="filters">
-    <div class="f"><label for="pRows">Rows</label><select id="pRows"></select></div>
-    <div class="f"><label for="pCols">Columns</label><select id="pCols"></select></div>
-    <div class="f"><label for="pMeasure">Measure</label><select id="pMeasure"></select></div>
-    <div class="f"><label for="pFilterDim">Filter</label><select id="pFilterDim"></select></div>
-    <div class="f"><label for="pFilterVal">is</label>
-      <select id="pFilterVal"><option value="all">(all)</option></select></div>
-    <div class="f"><label>&nbsp;</label><button class="toggle" id="pRun" type="button">Run</button></div>
-    <p class="hint" id="pStatus">Loading the query engine…</p>
-  </div>
-  <div class="chartbox tall"><canvas id="pChart"></canvas></div>
-  <div class="tblwrap"><table id="pTable"></table></div>
-  <p class="read">Counts shown are cube rows at the selected grain, not distinct providers —
-    arbitrary grains cannot be precomputed. Load the provider table for exact provider counts.</p>
-</section>
-
-<section class="card">
+<section class="plate">
   <div class="eyebrow"><span class="n">SQL</span> Ask your own question</div>
   <h2>Query the cube directly</h2>
   <p class="why">DuckDB runs entirely in your browser — nothing is uploaded. Two tables are
@@ -60,13 +37,35 @@
   </div>
   <div class="filters" id="sqlExamples"></div>
   <div class="tblwrap"><table id="sqlTable"></table></div>
+  <div class="pcap"><span>Pl. VII &middot; Direct SQL over the cube &middot; Unit: cube row</span><span class="src">Source <code>cube_full.parquet</code> + <code>providers.parquet</code> &middot; <code>pipeline/build_explorer_data.py</code></span></div>
+</section>
+
+<section class="plate">
+  <div class="eyebrow"><span class="n">Pivot</span> Build your own breakdown</div>
+  <div class="filters">
+    <div class="f"><label for="pRows">Rows</label><select id="pRows"></select></div>
+    <div class="f"><label for="pCols">Columns</label><select id="pCols"></select></div>
+    <div class="f"><label for="pMeasure">Measure</label><select id="pMeasure"></select></div>
+    <div class="f"><label for="pFilterDim">Filter</label><select id="pFilterDim"></select></div>
+    <div class="f"><label for="pFilterVal">is</label>
+      <select id="pFilterVal"><option value="all">(all)</option></select></div>
+    <div class="f"><label>&nbsp;</label><button class="toggle" id="pRun" type="button">Run</button></div>
+    <p class="hint" id="pStatus">Loading the query engine…</p>
+  </div>
+  <div class="chartbox tall" id="pChart"></div>
+  <div class="tblwrap"><table id="pTable"></table></div>
+  <p class="read">Counts shown are cube rows at the selected grain, not distinct providers —
+    arbitrary grains cannot be precomputed. Load the provider table for exact provider counts.</p>
+  <div class="pcap"><span>Pl. VIII &middot; Pivot over the published cube &middot; Unit: cube row</span><span class="src">Source <code>cube_dims.parquet</code> &middot; <code>pipeline/build_explorer_data.py</code></span></div>
 </section>
 
 </div>
-<script src="js/format.js"></script>
-<script src="js/charts.js"></script>
-<script src="js/engine.js"></script>
-<script src="js/permalink.js"></script>
-<script src="js/explore.js"></script>
+<script src="js/format.js?v=73f63088"></script>
+<script src="js/charts.js?v=fdc6692b"></script>
+<script src="js/engine.js?v=fc322508"></script>
+<script src="js/permalink.js?v=d30e8b24"></script>
+<script src="js/svg.js?v=8ec4c82e"></script>
+<script src="js/explore.js?v=d324cea1"></script>
+<script src="js/tip.js?v=3ca8d159"></script>
 </body>
 </html>

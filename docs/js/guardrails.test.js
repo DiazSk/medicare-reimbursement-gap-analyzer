@@ -41,14 +41,6 @@ test("very thin cohorts name the CMS floor", () => {
   assert.match(G.badgeText(4), /suppression floor/i);
 });
 
-test("opacity de-emphasises without hiding", () => {
-  assert.equal(G.opacityFor("ok"), 1);
-  assert.equal(G.opacityFor("thin"), 0.55);
-  assert.equal(G.opacityFor("very-thin"), 0.4);
-  // Never zero: the number must always remain visible.
-  assert.ok(G.opacityFor("very-thin") > 0);
-});
-
 test("missing cohort size is treated as unreliable, not reliable", () => {
   assert.equal(G.reliability(null), "very-thin");
   assert.equal(G.reliability(undefined), "very-thin");
@@ -148,5 +140,26 @@ test("applyBadge consistency: data-reliability always matches reliability(n)", (
     G.applyBadge(el, n);
     assert.equal(el.attrs["data-reliability"], G.reliability(n),
       `mismatch for n=${n}: badge says ${el.attrs["data-reliability"]} but reliability says ${G.reliability(n)}`);
+  }
+});
+
+test("isReliable is true only for ok", () => {
+  // The dot plot needs a boolean for its filled/hollow channel.
+  assert.equal(G.isReliable("ok"), true);
+  assert.equal(G.isReliable("thin"), false);
+  assert.equal(G.isReliable("very-thin"), false);
+  assert.equal(G.isReliable("nonsense"), false,
+    "an unknown level must not be treated as reliable");
+  assert.equal(G.isReliable(undefined), false);
+});
+
+test("isReliable and the badge flag exactly the same cohorts", () => {
+  // Hero 2's filled/hollow channel (isReliable) and the badge beside it (applyBadge)
+  // are two views of one verdict. If they disagree, a hollow dot ships with no
+  // warning, or a warning ships on a filled dot.
+  for (const n of [null, undefined, 0, 4, 5, 10, 11, 29, 30, 31, 100, 500, 1e6]) {
+    const el = elStub();
+    G.applyBadge(el, n);
+    assert.equal(G.isReliable(G.reliability(n)), el.hidden, `n=${n}`);
   }
 });

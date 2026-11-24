@@ -140,7 +140,7 @@
   /* Arrow -> plain objects. Three numeric shapes are narrowed here so no caller
      has to know about any of them:
 
-     - BigInt (a BIGINT column) breaks JSON and Chart.js.
+     - BigInt (a BIGINT column) breaks JSON.
      - SUM() over a BIGINT widens to HUGEINT, which Arrow returns as a Decimal:
        a Uint32Array subclass holding 128-bit limbs. Its toString is right, but
        its arithmetic and toLocaleString are not -- measured on

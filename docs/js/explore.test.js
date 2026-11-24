@@ -136,23 +136,30 @@ function loadWithDom() {
     pRows: { value: "specialty" }, pCols: { value: "" }, pMeasure: { value: "paid" },
     pFilterDim: { value: "" }, pFilterVal: { value: "" },
     pStatus: { textContent: "" }, pTable: { innerHTML: "" },
-    pChart: {}, pRun: {}, theme: {},
+    pChart: { innerHTML: "", clientWidth: 500 }, pRun: {}, theme: {},
   };
   const resolvers = [];
+  const listeners = {};
+  // The stub CAPTURES the spec: returning "" and discarding it let 17 of 26 mutations
+  // survive, including deleting the renderChart call outright.
+  const specs = [];
   const win = {
     MD: {
       engine: {
         isSupported: () => false,
         query: () => new Promise((resolve) => resolvers.push(resolve)),
       },
-      format: { money: (v) => String(v), count: (v) => String(v), pct: (v) => String(v) },
+      // money and moneyTick differ on purpose, so a fmt/fmtValue swap is visible.
+      format: { money: (v) => "M" + v, moneyTick: (v) => "T" + v,
+                count: (v) => String(v), pct: (v) => String(v) },
       permalink: { read: () => ({}), write: () => {} },
-      charts: {
-        readTokens: () => {}, tokens: () => ({ s1: "x" }),
-        axisOpts: () => ({}), legendOpts: () => ({}), tooltipOpts: () => ({}),
-        mount: () => {},
-      },
+      charts: { readTokens: () => {}, tokens: () => ({ s1: "x" }) },
+      svg: { dotPlot: (spec) => { specs.push(spec); return "<svg>plot</svg>"; } },
     },
+    // A real window has both. Without them the resize wiring throws into an
+    // unhandled rejection AFTER the test ends, which node reports as a pass.
+    innerWidth: 1200,
+    addEventListener: (type, fn) => { (listeners[type] || (listeners[type] = [])).push(fn); },
   };
   global.window = win;
   global.document = { getElementById: (id) => els[id] };
@@ -161,7 +168,8 @@ function loadWithDom() {
   // needs `document` to exist. Each test deletes it in a `finally`, so a
   // later plain load() (which expects `typeof document === "undefined"`)
   // never inherits it.
-  return { run: win.MD.explore.run, els, resolvers };
+  return { run: win.MD.explore.run, init: win.MD.explore.init,
+           els, resolvers, specs, win, listeners };
 }
 
 test("a slow query resolving after a fast one does not paint", async () => {
@@ -300,3 +308,129 @@ test("a stacked statement is still rejected (no regression from the shared norma
   const { isReadOnly } = load();
   assert.equal(isReadOnly("SELECT 1; DROP TABLE cube_full"), false);
 });
+
+/* ── renderChart's spec ───────────────────────────────────────────────────── */
+async function chartSpec(measure, data, mutate) {
+  const { run, els, resolvers, specs } = loadWithDom();
+  try {
+    els.pMeasure.value = measure;
+    if (mutate) mutate(els);
+    const p = run();
+    resolvers[0](data);
+    await p;
+    return { spec: specs[0], specs, els };
+  } finally {
+    delete global.document;
+  }
+}
+const desc = (n) => Array.from({ length: n }, (_, i) => ({ specialty: "S" + i, value: n - i }));
+
+test("renderChart draws the dot plot into #pChart, once", async () => {
+  const { specs, els } = await chartSpec("paid", desc(3));
+  assert.equal(specs.length, 1, "renderChart was never called");
+  assert.equal(els.pChart.innerHTML, "<svg>plot</svg>");
+});
+
+test("renderChart keeps the rows in query order (no .reverse()) and caps at 25", async () => {
+  const { spec } = await chartSpec("paid", desc(40));
+  assert.equal(spec.rows.length, 25);
+  assert.deepEqual(spec.rows.map((r) => r.value), desc(40).slice(0, 25).map((r) => r.value));
+});
+
+test("renderChart passes its host's width, falling back to 760 for a hidden host", async () => {
+  assert.equal((await chartSpec("paid", desc(2))).spec.width, 500);
+  assert.equal((await chartSpec("paid", desc(2), (e) => { e.pChart.clientWidth = 0; })).spec.width, 760);
+});
+
+test("renderChart: terse axis, precise value column; no axisFmt falls back to format", async () => {
+  const money = (await chartSpec("paid", desc(2))).spec;
+  assert.equal(money.fmt(5), "T5", "money measures tick with moneyTick");
+  assert.equal(money.fmtValue(5), "M5", "the value column keeps m.format");
+  const count = (await chartSpec("svcs", desc(2))).spec;
+  assert.equal(count.fmt(5), "5");
+  assert.equal(count.fmtValue(5), "5");
+});
+
+test("renderChart: only the signed measure asks for a zero rule", async () => {
+  assert.equal((await chartSpec("geoprem", desc(2))).spec.signed, true);
+  for (const k of ["paid", "svcs", "markup", "rate"]) {
+    assert.equal((await chartSpec(k, desc(2))).spec.signed, false, k);
+  }
+});
+
+test("renderChart's aria names the dimensions by label", async () => {
+  assert.equal((await chartSpec("paid", desc(2))).spec.aria, "Medicare paid by Specialty");
+  const two = await chartSpec("paid", desc(2).map((r) => ({ ...r, ruca_bucket: "x" })),
+    (e) => { e.pCols.value = "ruca_bucket"; });
+  assert.equal(two.spec.aria, "Medicare paid by Specialty and Rurality (RUCA)");
+});
+
+/* The chart writes a viewBox from the host width at render time; nothing re-read it,
+   so a window drag left the SVG scaling against a stale frame. Measured on the
+   findings page before the fix: narrowing to 420px put cGeo's labels at 3.1px. */
+
+test("a width change repaints the chart from the rows already in hand", async () => {
+  const { run, els, resolvers, specs, win, listeners } = loadWithDom();
+  try {
+    els.pMeasure.value = "paid";
+    const p = run();
+    resolvers[0](desc(3));
+    await p;
+    assert.equal(specs.length, 1, "first paint");
+    const queriesAfterFirstPaint = resolvers.length;
+
+    assert.ok(listeners.resize && listeners.resize.length,
+      "no resize listener was registered -- the chart can never redraw at a new width");
+
+    els.pChart.clientWidth = 340;
+    win.innerWidth = 420;
+    listeners.resize.forEach((fn) => fn());
+    await new Promise((r) => setTimeout(r, 260));
+
+    assert.equal(specs.length, 2, "the width changed and the chart did not repaint");
+    assert.equal(specs[1].width, 340, "the repaint must read the host's NEW width");
+    assert.deepEqual(specs[1].rows.map((r) => r.value), specs[0].rows.map((r) => r.value),
+      "the repaint must reuse the rows, not fetch different ones");
+    assert.equal(resolvers.length, queriesAfterFirstPaint,
+      "a resize re-queried the cube -- dragging a window must not re-run the query");
+  } finally {
+    delete global.document;
+  }
+});
+
+test("a height-only resize does not repaint", async () => {
+  // A phone fires resize whenever the URL bar hides. Nothing moves horizontally,
+  // so redrawing nine charts for it is pure waste.
+  const { run, els, resolvers, specs, listeners } = loadWithDom();
+  try {
+    els.pMeasure.value = "paid";
+    const p = run();
+    resolvers[0](desc(3));
+    await p;
+    assert.equal(specs.length, 1);
+
+    listeners.resize.forEach((fn) => fn());   // innerWidth untouched
+    await new Promise((r) => setTimeout(r, 260));
+
+    assert.equal(specs.length, 1, "repainted on a height-only resize");
+  } finally {
+    delete global.document;
+  }
+});
+
+test("a count axis labels a fractional tick truthfully, not by rounding it", () => {
+  /* niceTicks on a narrow count domain gives 3, 3.5, 4, 4.5, 5. count() renders
+     those as 3, 4, 4, 5, 5 -- a tick labelled 4 that sits at 3.5. The value column
+     keeps count(), because a datum really is a whole number of services. */
+  const { MEASURES } = load();
+  for (const key of ["svcs", "benes"]) {
+    const m = MEASURES.find((x) => x.key === key);
+    assert.ok(m.axisFmt, `${key} has no axisFmt, so its axis rounds`);
+    assert.equal(m.axisFmt(3.5), "3.5", `${key} axis must not round 3.5 to 4`);
+    assert.equal(m.axisFmt(1500000), "1,500,000", `${key} axis keeps grouping`);
+    // m.format still rounds, which is right for a datum -- format.test.js pins
+    // count() itself, and load()'s stub has no real MD.format to call here.
+    assert.ok(m.format, `${key} kept its value-column formatter`);
+  }
+});
+
